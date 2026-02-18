@@ -43,19 +43,13 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            export PATH="/usr/local/bin:$PATH"
-            cd ~/rustore-parser
-            docker compose pull app
-            docker compose up -d app
-            echo "✅ Deployed $(docker inspect rustore-parser --format '{{.Image}}' | cut -c 8-19) at $(date)"
+      - name: Trigger Watchtower update
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.WATCHTOWER_TOKEN }}" \
+            "${{ secrets.WATCHTOWER_URL }}/v1/update")
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Watchtower update triggered (HTTP $HTTP_CODE)"
+          else
+            echo "⚠️ Watchtower webhook returned HTTP $HTTP_CODE, will poll in ≤30s"
+          fi
