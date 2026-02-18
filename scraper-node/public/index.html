@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RuStore Intelligence Parser</title>
+    <title>Умный парсер RuStore</title>
     <link
         href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;500;600&display=swap"
         rel="stylesheet">
@@ -15,7 +15,7 @@
     <div class="container">
         <header>
             <div class="logo-area">
-                <h1>RuStore INTEL</h1>
+                <h1>Умный парсер RuStore</h1>
             </div>
             <div class="controls">
                 <div id="scan-indicator"
@@ -28,6 +28,60 @@
                 </button>
             </div>
         </header>
+
+        <div class="formula-block">
+            <button class="formula-toggle" onclick="toggleFormula()">
+                📐 Как рассчитывается Opportunity Score?
+                <span class="formula-arrow" id="formula-arrow">▼</span>
+            </button>
+            <div class="formula-content" id="formula-content">
+                <div class="formula-main">
+                    <strong>Score = round(100 × (0.30·F1 + 0.25·F2 + 0.25·F3 + 0.10·F4 + 0.10·F5))</strong>
+                </div>
+                <div class="formula-factors">
+                    <div class="formula-factor">
+                        <span class="factor-weight">30%</span>
+                        <div class="factor-info">
+                            <span class="factor-name">🏟️ Competition Gap (F1)</span>
+                            <span class="factor-desc">Мало конкурентов в RuStore → высокий балл. <code>max(0, 1 − конкуренты / 20)</code></span>
+                        </div>
+                    </div>
+                    <div class="formula-factor">
+                        <span class="factor-weight">25%</span>
+                        <div class="factor-info">
+                            <span class="factor-name">⭐ Quality Gap (F2)</span>
+                            <span class="factor-desc">Низкий средний рейтинг конкурентов → больше места для качественного приложения. <code>max(0, 1 − (avgRating − 2) / 3)</code></span>
+                        </div>
+                    </div>
+                    <div class="formula-factor">
+                        <span class="factor-weight">25%</span>
+                        <div class="factor-info">
+                            <span class="factor-name">📈 Proven Demand (F3)</span>
+                            <span class="factor-desc">Больше установок оригинала в GP → подтверждённый спрос. <code>min(1, log₁₀(installs + 1) / 9)</code></span>
+                        </div>
+                    </div>
+                    <div class="formula-factor">
+                        <span class="factor-weight">10%</span>
+                        <div class="factor-info">
+                            <span class="factor-name">✅ Validated Quality (F4)</span>
+                            <span class="factor-desc">Высокий рейтинг оригинала в GP → проверенная идея. <code>max(0, min(1, (gpRating − 2.5) / 2))</code></span>
+                        </div>
+                    </div>
+                    <div class="formula-factor">
+                        <span class="factor-weight">10%</span>
+                        <div class="factor-info">
+                            <span class="factor-name">💤 Top Competitor Weakness (F5)</span>
+                            <span class="factor-desc">Слабый лучший конкурент → легче обойти. <code>max(0, 1 − (maxRating − 2) / 3)</code></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="formula-legend">
+                    <span class="legend-item"><span class="opp-dot opp-dot-high"></span> 65–100 — отличная возможность</span>
+                    <span class="legend-item"><span class="opp-dot opp-dot-medium"></span> 40–64 — средняя возможность</span>
+                    <span class="legend-item"><span class="opp-dot opp-dot-low"></span> 0–39 — низкая возможность</span>
+                </div>
+            </div>
+        </div>
 
         <div class="tabs" id="tabs"></div>
         <div class="filters" id="filters"></div>
@@ -61,6 +115,14 @@
     </div>
 
     <script>
+        // ─── Formula toggle ────────────────────────────────────────
+        function toggleFormula() {
+            const content = document.getElementById('formula-content');
+            const arrow = document.getElementById('formula-arrow');
+            content.classList.toggle('open');
+            arrow.textContent = content.classList.contains('open') ? '▲' : '▼';
+        }
+
         // ─── State from URL params ──────────────────────────────────
         function getParams() {
             const p = new URLSearchParams(window.location.search);

@@ -546,6 +546,159 @@ tr:hover td {
     animation: highlight 2s ease-out;
 }
 
+/* Formula block */
+.formula-block {
+    margin-bottom: 20px;
+}
+
+.formula-toggle {
+    background: var(--card-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--accent-color);
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    transition: all 0.2s;
+    font-family: 'Inter', sans-serif;
+}
+
+.formula-toggle:hover {
+    border-color: var(--accent-color);
+    background: rgba(88, 166, 255, 0.08);
+}
+
+.formula-arrow {
+    margin-left: auto;
+    font-size: 0.7rem;
+    transition: transform 0.3s;
+}
+
+.formula-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease, padding 0.3s ease;
+    background: var(--card-bg);
+    border: 1px solid var(--glass-border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    padding: 0 20px;
+}
+
+.formula-content.open {
+    max-height: 600px;
+    padding: 20px;
+}
+
+.formula-main {
+    text-align: center;
+    padding: 14px;
+    background: rgba(88, 166, 255, 0.06);
+    border: 1px solid rgba(88, 166, 255, 0.15);
+    border-radius: 8px;
+    margin-bottom: 18px;
+    font-size: 0.95rem;
+    color: #f0f6fc;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.5px;
+}
+
+.formula-factors {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.formula-factor {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(240, 246, 252, 0.06);
+}
+
+.factor-weight {
+    background: rgba(88, 166, 255, 0.15);
+    color: var(--accent-color);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    min-width: 40px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.factor-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.factor-name {
+    font-weight: 600;
+    color: #f0f6fc;
+    font-size: 0.85rem;
+}
+
+.factor-desc {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+
+.factor-desc code {
+    background: rgba(255, 255, 255, 0.06);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: var(--warning-color);
+}
+
+.formula-legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding-top: 14px;
+    border-top: 1px solid var(--glass-border);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.opp-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.opp-dot-high {
+    background: var(--success-color);
+}
+
+.opp-dot-medium {
+    background: var(--warning-color);
+}
+
+.opp-dot-low {
+    background: var(--danger-color);
+}
+
 /* Tab navigation */
 .tabs {
     display: flex;

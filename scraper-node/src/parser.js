@@ -5,6 +5,69 @@ const APP_BRAIN_TOP_NEW_FREE_URL = 'https://www.appbrain.com/stats/google-play-r
 const RUSTORE_SEARCH_URL = 'https://www.rustore.ru/catalog/search?query=';
 
 // ═════════════════════════════════════════════════════════════════════
+// LLM — генерация поискового запроса через Qwen (DashScope)
+// ═════════════════════════════════════════════════════════════════════
+
+const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
+const DASHSCOPE_BASE_URL = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
+const LLM_MODEL = 'qwen-flash';
+
+const LLM_SYSTEM_PROMPT = `Ты помощник для поиска приложений в RuStore (российский магазин приложений). Тебе дают название приложения на английском и его категорию. Твоя задача — сгенерировать короткий поисковый запрос на русском языке (1-3 слова), по которому можно найти аналогичные приложения в RuStore. Если название — бренд (WhatsApp, Telegram, TikTok и т.п.), верни его как есть. Отвечай ТОЛЬКО поисковым запросом, без пояснений.`;
+
+const llmCache = new Map();
+
+async function generateSearchQueryWithLLM(title, category) {
+    if (!DASHSCOPE_API_KEY) {
+        return null; // ключ не задан — fallback к старому методу
+    }
+
+    const cacheKey = `${title}|${category}`;
+    if (llmCache.has(cacheKey)) {
+        console.log(`[LLM] cache hit: "${title}" → "${llmCache.get(cacheKey)}"`);
+        return llmCache.get(cacheKey);
+    }
+
+    try {
+        const result = await withRetry(async () => {
+            const response = await fetch(`${DASHSCOPE_BASE_URL}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: LLM_MODEL,
+                    messages: [
+                        { role: 'system', content: LLM_SYSTEM_PROMPT },
+                        { role: 'user', content: `Название: ${title}\nКатегория: ${category || 'Unknown'}` }
+                    ],
+                    temperature: 0.1,
+                    max_tokens: 30
+                }),
+                signal: AbortSignal.timeout(10000)
+            });
+
+            if (!response.ok) {
+                const errBody = await response.text();
+                throw new Error(`DashScope HTTP ${response.status}: ${errBody}`);
+            }
+
+            const data = await response.json();
+            const content = data.choices?.[0]?.message?.content?.trim();
+            if (!content) throw new Error('Empty LLM response');
+            return content;
+        }, { name: 'LLM query generation', maxRetries: 2, baseDelay: 1000 });
+
+        console.log(`[LLM] "${title}" → "${result}"`);
+        llmCache.set(cacheKey, result);
+        return result;
+    } catch (error) {
+        console.error(`[LLM] Failed for "${title}":`, error.message);
+        return null; // fallback к старому методу
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
 // 2.5 — Retry с exponential backoff
 // ═════════════════════════════════════════════════════════════════════
 
@@ -168,7 +231,7 @@ const UNIVERSAL_FILLER = new Set([
 
 // Категорийные стоп-слова — удаляем только если приложение в этой категории
 const CATEGORY_FILLER = {
-    'Tools':              new Set(['tool', 'tools', 'utility', 'utilities', 'helper']),
+    'Tools':              new Set(['tool', 'tools', 'utility', 'utilities', 'helper', 'launcher']),
     'Communication':      new Set(['messenger', 'messaging', 'chat', 'call', 'calling']),
     'Photography':        new Set(['photo', 'camera', 'picture', 'pic', 'image']),
     'Music & Audio':      new Set(['music', 'player', 'audio', 'sound', 'mp3']),
@@ -416,25 +479,36 @@ function calculateRelevance(competitor, searchQuery, cleanedTitle) {
 
 async function checkRuStore(title, category, gpRating, installs) {
     const startTime = Date.now();
+
+    // 0. Нормализация: запятые/точки с запятой без пробела → пробел
+    //    "Files,Launcher" → "Files Launcher", "PDF;Reader" → "PDF Reader"
+    title = title.replace(/[,;]+/g, ' ').replace(/\s+/g, ' ').trim();
+
     console.log(`\n=== checkRuStore: "${title}" (installs: ${installs || 'N/A'}) ===`);
 
     // 1. Классифицируем название (бренд / описательное / смешанное)
     const classification = classifyTitle(title);
     console.log(`Title type: ${classification.type} (brand words: [${classification.brandWords.join(', ')}])`);
 
-    // 2. Очищаем название от мусорных слов
+    // 2. Очищаем название от мусорных слов (для fallback)
     const cleaned = cleanSearchQuery(title, category);
     console.log(`Cleaned query: "${cleaned}"`);
 
-    // 3. Переводим ТОЛЬКО описательные названия
-    //    Бренды и смешанные — ищем оригинал (RuStore нормально ищет латиницу)
+    // 3. Генерируем поисковый запрос: LLM (Qwen) → fallback к старому методу
     let searchQuery;
-    if (classification.type === 'descriptive') {
+    const llmQuery = await generateSearchQueryWithLLM(title, category);
+
+    if (llmQuery) {
+        searchQuery = llmQuery;
+        console.log(`[LLM] Search query: "${searchQuery}"`);
+    } else if (classification.type === 'descriptive') {
+        // Fallback: переводим описательные названия через MyMemory
         searchQuery = await translateToRussian(cleaned);
-        console.log(`Descriptive → translated to: "${searchQuery}"`);
+        console.log(`Fallback (descriptive) → translated to: "${searchQuery}"`);
     } else {
+        // Fallback: бренды и смешанные — оригинал
         searchQuery = cleaned;
-        console.log(`${classification.type} → keeping original: "${searchQuery}"`);
+        console.log(`Fallback (${classification.type}) → keeping original: "${searchQuery}"`);
     }
 
     const searchUrl = RUSTORE_SEARCH_URL + encodeURIComponent(searchQuery);
