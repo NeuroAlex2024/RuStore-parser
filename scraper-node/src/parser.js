@@ -12,7 +12,27 @@ const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
 const DASHSCOPE_BASE_URL = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
 const LLM_MODEL = 'qwen-flash';
 
-const LLM_SYSTEM_PROMPT = `Ты помощник для поиска приложений в RuStore (российский магазин приложений). Тебе дают название приложения на английском и его категорию. Твоя задача — сгенерировать короткий поисковый запрос на русском языке (1-3 слова), по которому можно найти аналогичные приложения в RuStore. Если название — бренд (WhatsApp, Telegram, TikTok и т.п.), верни его как есть. Отвечай ТОЛЬКО поисковым запросом, без пояснений.`;
+const LLM_SYSTEM_PROMPT = `Ты генератор поисковых запросов для RuStore (российский магазин приложений для Android).
+
+Задача: по названию приложения из Google Play и его категории — выдай короткий поисковый запрос НА РУССКОМ ЯЗЫКЕ (1-3 слова), который описывает ФУНКЦИЮ приложения.
+
+Правила:
+1. Пойми, ЧТО ДЕЛАЕТ приложение, и опиши это по-русски. Думай: "что бы ввёл русский пользователь, чтобы найти такое приложение?"
+2. НЕ переводи название дословно. "Cleaner Launcher" → "очистка телефона", а НЕ "клинер лаунчер".
+3. Используй простые, популярные слова: "погода", "фонарик", "шагомер", "vpn", "сканер", "калькулятор".
+4. Бренды оставляй как есть ТОЛЬКО если это всемирно известное имя собственное: WhatsApp, Telegram, TikTok, Spotify, Uber, Shazam. Если не уверен — переводи функцию.
+5. Категория — подсказка, но не повторяй её буквально.
+6. Отвечай ТОЛЬКО поисковым запросом, без кавычек и пояснений.
+
+Примеры:
+- "Cleaner Launcher for Android" [Tools] → очистка телефона
+- "Local Weather Wherever" [Weather] → прогноз погоды
+- "Step Counter Pedometer" [Health & Fitness] → шагомер
+- "WhatsApp Messenger" [Communication] → WhatsApp
+- "Fast VPN Proxy" [Tools] → vpn
+- "Baby Monitor Camera" [Parenting] → радионяня
+- "PDF Scanner Document" [Productivity] → сканер документов
+- "Recover Deleted Files" [Tools] → восстановление файлов`;
 
 const llmCache = new Map();
 
