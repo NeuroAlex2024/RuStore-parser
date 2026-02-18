@@ -10,6 +10,9 @@ shared/data.db-wal
 # Agent configs (local tooling)
 .agent/
 
+# Python venv
+.venv/
+
 # Environment
 .env
 
