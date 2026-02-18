@@ -1,0 +1,18 @@
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# SQLite database (runtime data, not in repo)
+shared/data.db
+shared/data.db-shm
+shared/data.db-wal
+
+# Agent configs (local tooling)
+.agent/
+
+# Environment
+.env
+
+# OS files
+.DS_Store
+Thumbs.db

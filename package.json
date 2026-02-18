@@ -1,0 +1,8 @@
+{
+  "name": "rustore-parser",
+  "version": "1.0.0",
+  "description": "Smart RuStore Parser with AppBrain intelligence",
+  "scripts": {
+    "start": "cd scraper-node && node src/app.js"
+  }
+}

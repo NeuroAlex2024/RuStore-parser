@@ -1,0 +1,15 @@
+services:
+  app:
+    build: ./scraper-node
+    container_name: rustore-parser
+    ports:
+      - "5001:3000"
+    volumes:
+      - ./shared:/app/shared
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/app/shared/data.db
+
+networks:
+  default:
+    name: rustore-parser-network

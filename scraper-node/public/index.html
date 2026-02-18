@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuStore Intelligence Parser</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="logo-area">
+                <h1>RuStore INTEL</h1>
+            </div>
+            <div class="controls">
+                <div id="scan-indicator"
+                    style="display: none; color: var(--accent-color); font-size: 0.8rem; font-weight: 600;">
+                    <span class="pulse">●</span> SCANNING APPBRAIN...
+                </div>
+                <button class="btn btn-danger" onclick="resetRuStore()">🔄 Reset Checks</button>
+                <button id="update-list-btn" class="btn btn-primary" onclick="updateAppList()">
+                    UPDATE TOP 100
+                </button>
+            </div>
+        </header>
+
+        <div class="tabs" id="tabs"></div>
+        <div class="filters" id="filters"></div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>App</th>
+                        <th>Category</th>
+                        <th>GP Rating</th>
+                        <th>Installs</th>
+                        <th>Recent</th>
+                        <th>RuStore Check</th>
+                        <th>Score</th>
+                    </tr>
+                </thead>
+                <tbody id="app-table-body">
+                    <tr>
+                        <td colspan="8">
+                            <div class="empty-state">
+                                <div class="empty-icon">⏳</div>
+                                <h3>Loading...</h3>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // ─── State from URL params ──────────────────────────────────
+        function getParams() {
+            const p = new URLSearchParams(window.location.search);
+            return {
+                tab: p.get('tab') || 'top_free',
+                filter: p.get('filter') || 'all'
+            };
+        }
+
+        function setParams(tab, filter) {
+            const url = new URL(window.location);
+            url.searchParams.set('tab', tab);
+            url.searchParams.set('filter', filter);
+            window.history.pushState({}, '', url);
+        }
+
+        let currentTab = getParams().tab;
+        let currentFilter = getParams().filter;
+
+        // ─── Render tabs ────────────────────────────────────────────
+        function renderTabs() {
+            const tabs = [
+                { key: 'top_free', label: '🏆 Top Free Overall' },
+                { key: 'top_new_free', label: '🆕 Top New Free Overall' }
+            ];
+            const container = document.getElementById('tabs');
+            container.innerHTML = tabs.map(t =>
+                `<a class="tab-link ${t.key === currentTab ? 'active' : ''}" data-tab="${t.key}">${t.label}</a>`
+            ).join('');
+
+            container.querySelectorAll('.tab-link').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    currentTab = el.dataset.tab;
+                    setParams(currentTab, currentFilter);
+                    renderTabs();
+                    renderFilters();
+                    loadApps();
+                });
+            });
+        }
+
+        // ─── Render filters ─────────────────────────────────────────
+        function renderFilters() {
+            const filters = [
+                { key: 'all', label: 'All' },
+                { key: 'not_checked', label: 'Not Checked' },
+                { key: 'checked', label: 'Checked' }
+            ];
+            const container = document.getElementById('filters');
+            container.innerHTML = filters.map(f =>
+                `<a class="filter-link ${f.key === currentFilter ? 'active' : ''}" data-filter="${f.key}">${f.label}</a>`
+            ).join('');
+
+            container.querySelectorAll('.filter-link').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    currentFilter = el.dataset.filter;
+                    setParams(currentTab, currentFilter);
+                    renderFilters();
+                    loadApps();
+                });
+            });
+        }
+
+        // ─── Helpers ────────────────────────────────────────────────
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function getRatingBadgeClass(rating) {
+            if (rating >= 4.5) return 'badge-success';
+            if (rating >= 3.5) return 'badge-warning';
+            return 'badge-danger';
+        }
+
+        function getOpportunityClass(score) {
+            if (score >= 65) return 'opp-high';
+            if (score >= 40) return 'opp-medium';
+            return 'opp-low';
+        }
+
+        function getOpportunityEmoji(score) {
+            if (score >= 65) return '🟢';
+            if (score >= 40) return '🟡';
+            return '🔴';
+        }
+
+        function getRatingColor(rating) {
+            if (!rating) return 'var(--text-muted)';
+            if (rating >= 4.5) return 'var(--success-color)';
+            if (rating >= 3.5) return 'var(--warning-color)';
+            return 'var(--danger-color)';
+        }
+
+        // ─── Load and render apps ───────────────────────────────────
+        async function loadApps() {
+            const tbody = document.getElementById('app-table-body');
+            tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">⏳</div><h3>Loading...</h3></div></td></tr>`;
+
+            try {
+                const res = await fetch(`/api/apps?tab=${currentTab}&filter=${currentFilter}`);
+                const data = await res.json();
+
+                if (!res.ok) {
+                    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">⚠️</div><h3>Error</h3><p>${escapeHtml(data.error || 'Unknown error')}</p></div></td></tr>`;
+                    return;
+                }
+
+                const apps = data.apps;
+
+                if (!apps || apps.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div><h3>No apps loaded</h3><p>Click UPDATE TOP 100 to start.</p></div></td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = apps.map(app => renderAppRow(app)).join('');
+
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">❌</div><h3>Connection error</h3><p>${escapeHtml(e.message)}</p></div></td></tr>`;
+            }
+        }
+
+        function renderAppRow(app) {
+            const safeTitle = escapeHtml(app.title);
+            const safeCategory = escapeHtml(app.category || '');
+            const ratingClass = getRatingBadgeClass(app.gp_rating);
+
+            let statusHtml;
+            if (app.rustore_exists === 1) {
+                statusHtml = `<button class="btn-report-toggle" onclick="toggleReport(${app.id})">📊 Report</button>`;
+            } else {
+                statusHtml = `<button class="btn btn-check" onclick="checkRuStore(${app.id}, this)">
+                    <span class="btn-text">Check RS</span>
+                    <div class="loader"></div>
+                </button>`;
+            }
+
+            let scoreHtml;
+            if (app.opportunity_score !== null && app.opportunity_score !== undefined) {
+                const oppClass = getOpportunityClass(app.opportunity_score);
+                const oppEmoji = getOpportunityEmoji(app.opportunity_score);
+                scoreHtml = `<span class="opportunity-badge ${oppClass}">${oppEmoji} ${app.opportunity_score}/100</span>`;
+            } else {
+                scoreHtml = `<span style="color: var(--text-muted); opacity: 0.5;">—</span>`;
+            }
+
+            return `
+                <tr id="app-row-${app.id}"
+                    data-title="${safeTitle}"
+                    data-gp-rating="${app.gp_rating || 0}"
+                    data-category="${safeCategory}"
+                    data-installs="${escapeHtml(app.installs || 'N/A')}">
+                    <td class="rank-cell">${app.rank}</td>
+                    <td class="app-cell">
+                        <span class="app-title">${safeTitle}</span>
+                        <div class="app-meta">
+                            <a href="${escapeHtml(app.gp_url || '')}" target="_blank"
+                                style="color: var(--accent-color); text-decoration: none;">AppBrain Context</a>
+                        </div>
+                    </td>
+                    <td><span class="category-tag">${safeCategory}</span></td>
+                    <td>
+                        <div class="rating-badge ${ratingClass}">
+                            ⭐ ${app.gp_rating || 0}
+                        </div>
+                    </td>
+                    <td style="font-weight: 600; color: #f0f6fc;">${escapeHtml(app.installs || 'N/A')}</td>
+                    <td><span style="color: var(--warning-color); font-weight: 500;">${escapeHtml(app.recent || 'N/A')}</span></td>
+                    <td class="status-cell">${statusHtml}</td>
+                    <td class="score-cell">${scoreHtml}</td>
+                </tr>
+                <tr class="report-row" id="report-row-${app.id}">
+                    <td colspan="8" style="padding: 0 16px 16px 16px;">
+                        <div id="report-panel-${app.id}"></div>
+                    </td>
+                </tr>`;
+        }
+
+        // ─── Update app list (scrape AppBrain) ──────────────────────
+        async function updateAppList() {
+            const btn = document.getElementById('update-list-btn');
+            const indicator = document.getElementById('scan-indicator');
+
+            const tabLabel = currentTab === 'top_new_free' ? 'Top New Free' : 'Top Free';
+            if (!confirm(`This will refresh the ${tabLabel} Top 100 list from AppBrain. Continue?`)) return;
+
+            btn.disabled = true;
+            indicator.style.display = 'block';
+
+            try {
+                const res = await fetch(`/api/update-list?tab=${currentTab}`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    await loadApps();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Connection error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                indicator.style.display = 'none';
+            }
+        }
+
+        // ─── Reset RuStore checks ───────────────────────────────────
+        async function resetRuStore() {
+            if (!confirm('Reset all RuStore check results? This cannot be undone.')) return;
+
+            try {
+                const res = await fetch('/api/reset-rustore', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    await loadApps();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Connection error: ' + e.message);
+            }
+        }
+
+        // ─── Check RuStore ──────────────────────────────────────────
+        async function checkRuStore(id, btnEl) {
+            const row = document.getElementById(`app-row-${id}`);
+            const title = row.dataset.title;
+            const gpRating = parseFloat(row.dataset.gpRating) || 0;
+            const category = row.dataset.category;
+            const installs = row.dataset.installs || 'N/A';
+
+            const btnText = btnEl.querySelector('.btn-text');
+            const loader = btnEl.querySelector('.loader');
+
+            btnEl.disabled = true;
+            btnText.style.display = 'none';
+            loader.style.display = 'block';
+
+            try {
+                const res = await fetch(`/api/check/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, gp_rating: gpRating, category, installs })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    const statusCell = row.querySelector('.status-cell');
+                    const scoreCell = row.querySelector('.score-cell');
+                    const report = data.report;
+                    const oppScore = report.opportunityScore;
+
+                    // Update status → Report button
+                    statusCell.innerHTML = `<button class="btn-report-toggle" onclick="toggleReport(${id})">📊 Report</button>`;
+
+                    // Update score
+                    if (oppScore !== null && oppScore !== undefined) {
+                        const oppClass = getOpportunityClass(oppScore);
+                        const oppEmoji = getOpportunityEmoji(oppScore);
+                        scoreCell.innerHTML = `<span class="opportunity-badge ${oppClass}">${oppEmoji} ${oppScore}/100</span>`;
+                    }
+
+                    // Render and show report
+                    renderReport(id, report);
+                    row.classList.add('row-updated');
+                } else {
+                    alert('Check failed: ' + (data.error || 'Unknown error'));
+                    btnEl.disabled = false;
+                    btnText.style.display = 'block';
+                    loader.style.display = 'none';
+                }
+            } catch (e) {
+                alert('Error checking RuStore: ' + e.message);
+                btnEl.disabled = false;
+                btnText.style.display = 'block';
+                loader.style.display = 'none';
+            }
+        }
+
+        // ─── Report rendering ───────────────────────────────────────
+        function renderReport(appId, report) {
+            const reportRow = document.getElementById(`report-row-${appId}`);
+            const reportPanel = document.getElementById(`report-panel-${appId}`);
+
+            if (!report) return;
+
+            let competitorsHtml = '';
+            if (report.topCompetitors && report.topCompetitors.length > 0) {
+                competitorsHtml = `
+                    <div class="competitors-list">
+                        <h4>🏆 Топ-5 конкурентов по рейтингу</h4>
+                        ${report.topCompetitors.map((c, i) => `
+                            <div class="competitor-item">
+                                <span class="competitor-rank">${i + 1}.</span>
+                                <div class="competitor-info">
+                                    <a href="${escapeHtml(c.url || '')}" target="_blank" class="competitor-name">${escapeHtml(c.name)}</a>
+                                    <div class="competitor-dev">${escapeHtml(c.category || '')}</div>
+                                </div>
+                                <span class="competitor-rating" style="color: ${getRatingColor(c.rating)}">
+                                    ${c.rating ? '⭐ ' + c.rating : '—'}
+                                </span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                competitorsHtml = '<div class="no-results-msg">Приложения не найдены в выдаче РуСтора</div>';
+            }
+
+            const oppScore = report.opportunityScore;
+            const oppClass = getOpportunityClass(oppScore);
+            const oppEmoji = getOpportunityEmoji(oppScore);
+
+            reportPanel.innerHTML = `
+                <div class="report-panel">
+                    <div class="report-header">
+                        <h3>🔍 RuStore Report: <a href="${escapeHtml(report.searchUrl || '')}" target="_blank" class="search-query-link">"${escapeHtml(report.searchQuery || '')}"</a></h3>
+                        ${oppScore !== null && oppScore !== undefined ? `<span class="opportunity-badge ${oppClass}">${oppEmoji} Opportunity: ${oppScore}/100</span>` : ''}
+                    </div>
+                    <div class="report-stats">
+                        <div class="stat-card">
+                            <span class="stat-value">${report.competitorsCount}</span>
+                            <span class="stat-label">Конкурентов</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value">${report.avgRating !== null && report.avgRating !== undefined ? '⭐ ' + report.avgRating : '—'}</span>
+                            <span class="stat-label">Средний рейтинг</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value">${report.maxRating !== null && report.maxRating !== undefined ? '⭐ ' + report.maxRating : '—'}</span>
+                            <span class="stat-label">Макс. рейтинг</span>
+                        </div>
+                    </div>
+                    ${competitorsHtml}
+                </div>
+            `;
+
+            reportRow.classList.add('open');
+        }
+
+        async function toggleReport(id) {
+            const reportRow = document.getElementById(`report-row-${id}`);
+            const reportPanel = document.getElementById(`report-panel-${id}`);
+
+            if (reportRow.classList.contains('open')) {
+                reportRow.classList.remove('open');
+                return;
+            }
+
+            if (reportPanel.innerHTML.trim() === '') {
+                reportPanel.innerHTML = '<div style="padding: 20px; text-align: center;"><div class="loader" style="display: inline-block; border-top-color: var(--accent-color);"></div> Loading report...</div>';
+                reportRow.classList.add('open');
+
+                try {
+                    const res = await fetch(`/api/report/${id}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        renderReport(id, data.report);
+                    } else {
+                        reportPanel.innerHTML = `<div class="no-results-msg">Error: ${escapeHtml(data.error || 'Unknown')}</div>`;
+                    }
+                } catch (e) {
+                    reportPanel.innerHTML = `<div class="no-results-msg">Connection error: ${escapeHtml(e.message)}</div>`;
+                }
+            } else {
+                reportRow.classList.add('open');
+            }
+        }
+
+        // ─── Handle browser back/forward ────────────────────────────
+        window.addEventListener('popstate', () => {
+            const p = getParams();
+            currentTab = p.tab;
+            currentFilter = p.filter;
+            renderTabs();
+            renderFilters();
+            loadApps();
+        });
+
+        // ─── Init ───────────────────────────────────────────────────
+        renderTabs();
+        renderFilters();
+        loadApps();
+    </script>
+</body>
+
+</html>

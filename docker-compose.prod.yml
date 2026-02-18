@@ -1,0 +1,47 @@
+services:
+  app:
+    image: ghcr.io/neuroalex2024/rustore-parser:latest
+    container_name: rustore-parser
+    restart: unless-stopped
+    ports:
+      - "5001:3000"
+    volumes:
+      - ./shared:/app/shared
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/app/shared/data.db
+    labels:
+      - "com.centurylinklabs.watchtower.scope=rustore"
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Проверять обновления каждые 60 секунд
+      - WATCHTOWER_POLL_INTERVAL=60
+      # Следить только за контейнером rustore-parser
+      - WATCHTOWER_SCOPE=rustore
+      # Удалять старые образы после обновления
+      - WATCHTOWER_CLEANUP=true
+      # Логирование
+      - WATCHTOWER_LOG_LEVEL=info
+    labels:
+      - "com.centurylinklabs.watchtower.scope=rustore"
+    # Передаём credentials для доступа к GHCR
+    # Watchtower использует docker config.json для авторизации
+    # Нужно заранее сделать: docker login ghcr.io
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+
+networks:
+  default:
+    name: rustore-parser-network
