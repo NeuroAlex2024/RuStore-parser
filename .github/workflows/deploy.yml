@@ -1,4 +1,4 @@
-name: Build & Push to GHCR
+name: Build, Push & Deploy
 
 on:
   push:
@@ -42,3 +42,20 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            export PATH="/usr/local/bin:$PATH"
+            cd ~/rustore-parser
+            docker compose pull app
+            docker compose up -d app
+            echo "✅ Deployed $(docker inspect rustore-parser --format '{{.Image}}' | cut -c 8-19) at $(date)"
