@@ -3,8 +3,6 @@ const path = require('path');
 const cors = require('cors');
 const morgan = require('morgan');
 const { scrapeTopFree, scrapeTopNewFree, checkRuStore, closeBrowser } = require('./parser');
-
-const BUILD_ID = '20260218-webhook-test';
 const { replaceApps, updateRuStoreData, saveReport, getReport, getApps, resetRuStoreData, closeDb } = require('./db');
 
 const app = express();
