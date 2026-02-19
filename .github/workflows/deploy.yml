@@ -45,11 +45,11 @@ jobs:
 
       - name: Trigger Watchtower update
         run: |
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
             -H "Authorization: Bearer ${{ secrets.WATCHTOWER_TOKEN }}" \
             "${{ secrets.WATCHTOWER_URL }}/v1/update")
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ Watchtower update triggered (HTTP $HTTP_CODE)"
           else
-            echo "⚠️ Watchtower webhook returned HTTP $HTTP_CODE, will poll in ≤30s"
+            echo "⚠️ Watchtower returned HTTP $HTTP_CODE — will auto-update via polling within 5 min"
           fi
