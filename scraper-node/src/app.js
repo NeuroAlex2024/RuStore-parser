@@ -4,6 +4,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const { scrapeTopFree, scrapeTopNewFree, checkRuStore, closeBrowser } = require('./parser');
 const { replaceApps, updateRuStoreData, saveReport, getReport, getApps, resetRuStoreData, closeDb } = require('./db');
+// deploy-test: 2026-02-19T13:08
 
 const app = express();
 const PORT = process.env.PORT || 3000;
