@@ -84,6 +84,39 @@ async function initSchema() {
         )
     `);
 
+    // Таблицы для Flow 2 (проверка пользовательских идей)
+    await dbRun(`
+        CREATE TABLE IF NOT EXISTS idea_checks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            description TEXT NOT NULL,
+            verdict TEXT,
+            reasoning TEXT,
+            search_query TEXT,
+            estimated_category TEXT,
+            estimated_gp_rating REAL,
+            estimated_installs TEXT,
+            opportunity_score INTEGER,
+            skipped_rustore INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    await dbRun(`
+        CREATE TABLE IF NOT EXISTS idea_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            idea_id INTEGER NOT NULL,
+            search_query TEXT,
+            search_url TEXT,
+            competitors_count INTEGER DEFAULT 0,
+            avg_rating REAL,
+            max_rating REAL,
+            opportunity_score INTEGER,
+            top_competitors TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (idea_id) REFERENCES idea_checks(id) ON DELETE CASCADE
+        )
+    `);
+
     // Миграции для существующих БД — добавляем колонки если их нет
     const columns = await dbAll("PRAGMA table_info(apps)");
     const columnNames = columns.map(c => c.name);
@@ -250,6 +283,109 @@ function closeDb() {
     });
 }
 
+// ════════════════════════════════════════════════════════════════════
+// Flow 2: Операции с идеями
+// ════════════════════════════════════════════════════════════════════
+
+/**
+ * Сохраняет проверку идеи (оценка Qwen + результат RuStore).
+ * @returns {number} id созданной записи
+ */
+async function saveIdeaCheck(description, evaluation, ruStoreResult) {
+    await schemaReady;
+    await dbRun('BEGIN TRANSACTION');
+    try {
+        const { lastID } = await dbRun(
+            `INSERT INTO idea_checks
+             (description, verdict, reasoning, search_query, estimated_category, estimated_gp_rating, estimated_installs, opportunity_score, skipped_rustore)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                description,
+                evaluation.verdict,
+                evaluation.reasoning || '',
+                ruStoreResult.searchQuery || evaluation.searchQuery || '',
+                evaluation.estimatedCategory || '',
+                evaluation.estimatedGpRating || null,
+                evaluation.estimatedInstalls || '',
+                ruStoreResult.opportunityScore ?? null,
+                ruStoreResult.skippedRuStore ? 1 : 0
+            ]
+        );
+
+        // Сохраняем подробный отчёт если RuStore был опрошен
+        if (!ruStoreResult.skippedRuStore && ruStoreResult.searchUrl) {
+            await dbRun(
+                `INSERT INTO idea_reports
+                 (idea_id, search_query, search_url, competitors_count, avg_rating, max_rating, opportunity_score, top_competitors)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    lastID,
+                    ruStoreResult.searchQuery,
+                    ruStoreResult.searchUrl,
+                    ruStoreResult.competitorsCount ?? 0,
+                    ruStoreResult.avgRating ?? null,
+                    ruStoreResult.maxRating ?? null,
+                    ruStoreResult.opportunityScore ?? null,
+                    JSON.stringify(ruStoreResult.topCompetitors || [])
+                ]
+            );
+        }
+
+        await dbRun('COMMIT');
+        console.log(`Idea check saved: id=${lastID}, verdict=${evaluation.verdict}`);
+        return lastID;
+    } catch (err) {
+        await dbRun('ROLLBACK');
+        console.error('saveIdeaCheck failed, rolled back:', err.message);
+        throw err;
+    }
+}
+
+/**
+ * Возвращает список проверок идей (History), от новых к старым.
+ */
+async function getIdeaChecks(limit = 50) {
+    await schemaReady;
+    return dbAll(
+        'SELECT * FROM idea_checks ORDER BY created_at DESC LIMIT ?',
+        [limit]
+    );
+}
+
+/**
+ * Возвращает полный отчёт по идее (idea_checks + idea_reports).
+ */
+async function getIdeaReport(ideaId) {
+    await schemaReady;
+    const check = await dbGet('SELECT * FROM idea_checks WHERE id = ?', [ideaId]);
+    if (!check) return null;
+
+    const report = await dbGet('SELECT * FROM idea_reports WHERE idea_id = ?', [ideaId]);
+
+    return {
+        id: check.id,
+        description: check.description,
+        verdict: check.verdict,
+        reasoning: check.reasoning,
+        searchQuery: check.search_query,
+        estimatedCategory: check.estimated_category,
+        estimatedGpRating: check.estimated_gp_rating,
+        estimatedInstalls: check.estimated_installs,
+        opportunityScore: check.opportunity_score,
+        skippedRuStore: !!check.skipped_rustore,
+        createdAt: check.created_at,
+        ruStoreReport: report ? {
+            searchQuery: report.search_query,
+            searchUrl: report.search_url,
+            competitorsCount: report.competitors_count,
+            avgRating: report.avg_rating,
+            maxRating: report.max_rating,
+            opportunityScore: report.opportunity_score,
+            topCompetitors: JSON.parse(report.top_competitors || '[]')
+        } : null
+    };
+}
+
 module.exports = {
     replaceApps,
     updateRuStoreData,
@@ -257,5 +393,8 @@ module.exports = {
     getReport,
     getApps,
     resetRuStoreData,
+    saveIdeaCheck,
+    getIdeaChecks,
+    getIdeaReport,
     closeDb
 };

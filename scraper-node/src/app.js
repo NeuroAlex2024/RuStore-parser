@@ -2,8 +2,8 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const morgan = require('morgan');
-const { scrapeTopFree, scrapeTopNewFree, checkRuStore, closeBrowser } = require('./parser');
-const { replaceApps, updateRuStoreData, saveReport, getReport, getApps, resetRuStoreData, closeDb } = require('./db');
+const { scrapeTopFree, scrapeTopNewFree, checkRuStore, checkIdeaInRuStore, closeBrowser } = require('./parser');
+const { replaceApps, updateRuStoreData, saveReport, getReport, getApps, resetRuStoreData, saveIdeaCheck, getIdeaChecks, getIdeaReport, closeDb } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -157,6 +157,65 @@ app.post('/api/reset-rustore', async (req, res) => {
         res.json({ message: 'RuStore data reset successfully' });
     } catch (error) {
         console.error('Reset error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── API Flow 2: Проверка идеи пользователя ─────────────────────
+app.post('/api/check-idea', async (req, res) => {
+    const { description } = req.body;
+
+    if (!description || description.trim().length < 10) {
+        return res.status(400).json({ error: 'Опишите идею подробнее (минимум 10 символов)' });
+    }
+
+    try {
+        console.log(`[API] /check-idea: "${description.slice(0, 80)}..."`);
+        const result = await checkIdeaInRuStore(description.trim());
+
+        // Сохраняем результат в БД
+        const ideaId = await saveIdeaCheck(description.trim(), result.ideaEvaluation, result);
+
+        res.json({
+            success: true,
+            ideaId,
+            ideaEvaluation: result.ideaEvaluation,
+            searchQuery: result.searchQuery,
+            searchUrl: result.searchUrl,
+            skippedRuStore: result.skippedRuStore || false,
+            competitorsCount: result.competitorsCount,
+            avgRating: result.avgRating,
+            maxRating: result.maxRating,
+            opportunityScore: result.opportunityScore,
+            topCompetitors: result.topCompetitors
+        });
+    } catch (error) {
+        console.error('[API] check-idea failed:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── API Flow 2: История проверок идей ──────────────────────────
+app.get('/api/idea-checks', async (req, res) => {
+    try {
+        const checks = await getIdeaChecks(50);
+        res.json({ success: true, checks });
+    } catch (error) {
+        console.error('[API] idea-checks failed:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── API Flow 2: Полный отчёт по ID идеи ─────────────────────────
+app.get('/api/idea-report/:id', async (req, res) => {
+    try {
+        const report = await getIdeaReport(req.params.id);
+        if (!report) {
+            return res.status(404).json({ error: 'Idea report not found' });
+        }
+        res.json({ success: true, report });
+    } catch (error) {
+        console.error('[API] idea-report failed:', error.message);
         res.status(500).json({ error: error.message });
     }
 });

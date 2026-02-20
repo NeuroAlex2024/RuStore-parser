@@ -11,6 +11,7 @@ const RUSTORE_SEARCH_URL = 'https://www.rustore.ru/catalog/search?query=';
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
 const DASHSCOPE_BASE_URL = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
 const LLM_MODEL = 'qwen-flash';
+const IDEA_EVALUATOR_MODEL = 'qwen-plus'; // qwen-plus — баланс качества и скорости для анализа идей
 
 const LLM_SYSTEM_PROMPT = `Ты генератор поисковых запросов для RuStore (российский магазин приложений для Android).
 
@@ -150,7 +151,7 @@ async function getRuStoreContext() {
 
 async function closeBrowser() {
     if (rusContext) {
-        await rusContext.close().catch(() => {});
+        await rusContext.close().catch(() => { });
         rusContext = null;
     }
     if (browser) {
@@ -251,25 +252,25 @@ const UNIVERSAL_FILLER = new Set([
 
 // Категорийные стоп-слова — удаляем только если приложение в этой категории
 const CATEGORY_FILLER = {
-    'Tools':              new Set(['tool', 'tools', 'utility', 'utilities', 'helper', 'launcher']),
-    'Communication':      new Set(['messenger', 'messaging', 'chat', 'call', 'calling']),
-    'Photography':        new Set(['photo', 'camera', 'picture', 'pic', 'image']),
-    'Music & Audio':      new Set(['music', 'player', 'audio', 'sound', 'mp3']),
-    'Entertainment':      new Set(['entertainment', 'fun', 'funny']),
-    'Education':          new Set(['learn', 'learning', 'education', 'study', 'school']),
-    'Health & Fitness':   new Set(['health', 'fitness', 'workout', 'exercise']),
-    'Finance':            new Set(['finance', 'money', 'bank', 'banking', 'pay', 'payment']),
-    'Productivity':       new Set(['productivity', 'organizer', 'planner']),
-    'Shopping':           new Set(['shopping', 'shop', 'store', 'deals', 'coupons', 'sale']),
-    'Social':             new Set(['social', 'network', 'friends', 'community']),
-    'Travel & Local':     new Set(['travel', 'hotel', 'flights', 'booking', 'trip', 'guide']),
-    'Weather':            new Set(['weather', 'forecast', 'radar', 'climate']),
-    'Lifestyle':          new Set(['lifestyle', 'fashion', 'style', 'beauty']),
+    'Tools': new Set(['tool', 'tools', 'utility', 'utilities', 'helper', 'launcher']),
+    'Communication': new Set(['messenger', 'messaging', 'chat', 'call', 'calling']),
+    'Photography': new Set(['photo', 'camera', 'picture', 'pic', 'image']),
+    'Music & Audio': new Set(['music', 'player', 'audio', 'sound', 'mp3']),
+    'Entertainment': new Set(['entertainment', 'fun', 'funny']),
+    'Education': new Set(['learn', 'learning', 'education', 'study', 'school']),
+    'Health & Fitness': new Set(['health', 'fitness', 'workout', 'exercise']),
+    'Finance': new Set(['finance', 'money', 'bank', 'banking', 'pay', 'payment']),
+    'Productivity': new Set(['productivity', 'organizer', 'planner']),
+    'Shopping': new Set(['shopping', 'shop', 'store', 'deals', 'coupons', 'sale']),
+    'Social': new Set(['social', 'network', 'friends', 'community']),
+    'Travel & Local': new Set(['travel', 'hotel', 'flights', 'booking', 'trip', 'guide']),
+    'Weather': new Set(['weather', 'forecast', 'radar', 'climate']),
+    'Lifestyle': new Set(['lifestyle', 'fashion', 'style', 'beauty']),
     'Video Players & Editors': new Set(['video', 'player', 'editor', 'movie', 'clip']),
-    'Maps & Navigation':  new Set(['maps', 'map', 'navigation', 'gps', 'directions']),
-    'News & Magazines':   new Set(['news', 'magazine', 'headlines', 'daily']),
-    'Food & Drink':       new Set(['food', 'recipe', 'restaurant', 'cooking', 'delivery']),
-    'Business':           new Set(['business', 'office', 'corporate', 'enterprise']),
+    'Maps & Navigation': new Set(['maps', 'map', 'navigation', 'gps', 'directions']),
+    'News & Magazines': new Set(['news', 'magazine', 'headlines', 'daily']),
+    'Food & Drink': new Set(['food', 'recipe', 'restaurant', 'cooking', 'delivery']),
+    'Business': new Set(['business', 'office', 'corporate', 'enterprise']),
 };
 
 /**
@@ -720,9 +721,231 @@ function calculateOpportunityScore({ competitorsCount, avgRating, maxRating, gpR
     return Math.max(0, Math.min(100, score));
 }
 
+// ═════════════════════════════════════════════════════════════════════
+// FLOW 2 — Оценка пользовательской идеи через Qwen
+// ═════════════════════════════════════════════════════════════════════
+
+const IDEA_EVALUATOR_SYSTEM_PROMPT = `Ты аналитик мобильного рынка. Пользователь описывает идею приложения для Android.
+
+Твоя задача — оценить перспективность идеи и сформировать поисковый запрос для поиска аналогов в RuStore (российский магазин приложений).
+
+Отвечай СТРОГО в формате JSON без markdown-блоков, без пояснений, только чистый JSON:
+{
+  "verdict": "promising" | "weak" | "too_broad",
+  "reasoning": "Краткое обоснование на русском (2-3 предложения)",
+  "searchQuery": "поисковый запрос на русском для RuStore (1-3 слова)",
+  "estimatedCategory": "категория на английском как в Google Play",
+  "estimatedGpRating": 4.2,
+  "estimatedInstalls": "1M+"
+}
+
+Критерии verdict:
+- "promising" — идея конкретная, понятная целевая аудитория, есть реальная потребность
+- "weak" — идея слишком общая, уже переполненный рынок без дифференциации, технически нереалистична для одного разработчика, или нет очевидной монетизации
+- "too_broad" — описание слишком расплывчатое, невозможно сформировать запрос
+
+Для searchQuery: 1-3 слова на русском, которые бы ввёл пользователь RuStore при поиске такого приложения.
+EstimatedGpRating: твоя оценка среднего рейтинга подобных приложений в GP (от 3.0 до 5.0).
+EstimatedInstalls: типичный диапазон установок похожих приложений ("100K+", "1M+", "10M+" и т.д.).`;
+
+/**
+ * Flow 2 — Шаг 1: Оценка идеи через Qwen (первичный фильтр).
+ * @param {string} description — описание идеи от пользователя
+ * @returns {{ verdict, reasoning, searchQuery, estimatedCategory, estimatedGpRating, estimatedInstalls }}
+ */
+async function evaluateIdea(description) {
+    if (!DASHSCOPE_API_KEY) {
+        throw new Error('DASHSCOPE_API_KEY не задан — невозможно оценить идею');
+    }
+
+    console.log(`[IDEA] Evaluating idea: "${description.slice(0, 80)}..."`);
+
+    const raw = await withRetry(async () => {
+        const response = await fetch(`${DASHSCOPE_BASE_URL}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: IDEA_EVALUATOR_MODEL,
+                messages: [
+                    { role: 'system', content: IDEA_EVALUATOR_SYSTEM_PROMPT },
+                    { role: 'user', content: `Идея приложения:\n${description}` }
+                ],
+                temperature: 0.3,
+                max_tokens: 300
+            }),
+            signal: AbortSignal.timeout(20000)
+        });
+
+        if (!response.ok) {
+            const errBody = await response.text();
+            throw new Error(`DashScope HTTP ${response.status}: ${errBody}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content?.trim();
+        if (!content) throw new Error('Empty response from idea evaluator');
+        return content;
+    }, { name: 'Idea evaluation', maxRetries: 2, baseDelay: 1500 });
+
+    // Парсим JSON из ответа (модель иногда добавляет ```json ... ```)
+    let parsed;
+    try {
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+    } catch (e) {
+        console.error('[IDEA] Failed to parse JSON response:', raw);
+        throw new Error(`Не удалось разобрать ответ модели: ${raw.slice(0, 200)}`);
+    }
+
+    // Валидация обязательных полей
+    if (!parsed.verdict || !parsed.searchQuery) {
+        throw new Error(`Неполный ответ модели: ${JSON.stringify(parsed)}`);
+    }
+
+    console.log(`[IDEA] verdict=${parsed.verdict}, searchQuery="${parsed.searchQuery}"`);
+    return parsed;
+}
+
+/**
+ * Flow 2 — Полный флоу: описание идеи → оценка Qwen → проверка RuStore → Opportunity Score.
+ * @param {string} description — описание идеи от пользователя
+ * @returns {{ ideaEvaluation, searchQuery, searchUrl, competitorsCount, avgRating, maxRating, opportunityScore, topCompetitors }}
+ */
+async function checkIdeaInRuStore(description) {
+    console.log(`\n========== FLOW 2: checkIdeaInRuStore ==========`);
+
+    // Шаг 1: Первичный фильтр — оценка идеи через Qwen
+    const evaluation = await evaluateIdea(description);
+
+    // Если идея слабая — возвращаем ранний результат без парсинга RuStore
+    if (evaluation.verdict === 'weak' || evaluation.verdict === 'too_broad') {
+        console.log(`[IDEA] Early exit: verdict=${evaluation.verdict}`);
+        return {
+            ideaEvaluation: evaluation,
+            searchQuery: evaluation.searchQuery || '',
+            searchUrl: null,
+            competitorsCount: 0,
+            topCompetitors: [],
+            avgRating: null,
+            maxRating: null,
+            opportunityScore: evaluation.verdict === 'too_broad' ? null : 0,
+            skippedRuStore: true
+        };
+    }
+
+    // Шаг 2: Вторичный фильтр — проверка в RuStore
+    console.log(`[IDEA] Proceeding to RuStore check with query: "${evaluation.searchQuery}"`);
+
+    // Используем searchQuery от Qwen напрямую, минуя внутреннюю генерацию
+    // Передаём специальный флаг через category, чтобы checkRuStore не вызывал LLM повторно
+    const ruStoreResult = await checkRuStoreWithQuery(
+        evaluation.searchQuery,
+        evaluation.estimatedGpRating || 4.0,
+        evaluation.estimatedInstalls || '1M+'
+    );
+
+    return {
+        ideaEvaluation: evaluation,
+        ...ruStoreResult
+    };
+}
+
+/**
+ * Внутренняя функция: проверка RuStore по готовому запросу (без генерации через LLM).
+ * Переиспользует весь парсинг и scoring из checkRuStore().
+ */
+async function checkRuStoreWithQuery(searchQuery, gpRating, installs) {
+    const startTime = Date.now();
+    const searchUrl = RUSTORE_SEARCH_URL + encodeURIComponent(searchQuery);
+    console.log(`[IDEA] RuStore search URL: ${searchUrl}`);
+
+    const context = await getRuStoreContext();
+    const page = await context.newPage();
+    let competitors = [];
+
+    try {
+        await withRetry(
+            () => page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 15000 }),
+            { name: 'RuStore goto (idea)', maxRetries: 3, baseDelay: 2000 }
+        );
+
+        try {
+            await page.waitForSelector('[data-testid="app-card"]', { timeout: 5000 });
+        } catch {
+            console.log('[IDEA] No app cards found on RuStore');
+            const score = calculateOpportunityScore({
+                competitorsCount: 0, avgRating: null, maxRating: null,
+                gpRating: gpRating || 4.0, installs: installs || '1M+'
+            });
+            return { searchQuery, searchUrl, competitorsCount: 0, topCompetitors: [], avgRating: null, maxRating: null, opportunityScore: score };
+        }
+
+        competitors = await page.evaluate(() => {
+            const cards = document.querySelectorAll('[data-testid="app-card"]');
+            const results = [];
+            cards.forEach(card => {
+                const href = card.getAttribute('href') || '';
+                const url = href.startsWith('http') ? href : 'https://www.rustore.ru' + href;
+                const paragraphs = card.querySelectorAll('p');
+                const name = paragraphs[0] ? paragraphs[0].textContent.trim() : '';
+                const cat = paragraphs[1] ? paragraphs[1].textContent.trim() : '';
+                const ratingEl = card.querySelector('[data-testid="rating"]');
+                let rating = null;
+                if (ratingEl) {
+                    const ratingText = ratingEl.textContent.trim().replace(',', '.');
+                    rating = parseFloat(ratingText) || null;
+                }
+                if (name) results.push({ name, category: cat, rating, url });
+            });
+            return results;
+        });
+
+        console.log(`[IDEA] Found ${competitors.length} raw results on RuStore`);
+    } catch (error) {
+        console.error('[IDEA] Failed to scrape RuStore:', error.message);
+    } finally {
+        await page.close();
+    }
+
+    // Фильтрация по релевантности
+    for (const c of competitors) {
+        c.relevance = calculateRelevance(c, searchQuery, searchQuery);
+        c.relevant = c.relevance >= RELEVANCE_THRESHOLD;
+    }
+    const relevant = competitors.filter(c => c.relevant);
+    console.log(`[IDEA] Relevance filter: ${relevant.length} relevant of ${competitors.length}`);
+
+    const competitorsCount = relevant.length;
+    const ratingsOnly = relevant.filter(c => c.rating !== null).map(c => c.rating);
+    const avgRating = ratingsOnly.length > 0
+        ? Math.round((ratingsOnly.reduce((a, b) => a + b, 0) / ratingsOnly.length) * 10) / 10
+        : null;
+    const maxRating = ratingsOnly.length > 0 ? Math.max(...ratingsOnly) : null;
+
+    const topCompetitors = [...relevant]
+        .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+        .slice(0, 5);
+
+    const opportunityScore = calculateOpportunityScore({
+        competitorsCount,
+        avgRating,
+        maxRating,
+        gpRating: gpRating || 4.0,
+        installs: installs || '1M+'
+    });
+
+    console.log(`[IDEA] Score: ${opportunityScore}, competitors: ${competitorsCount}, done in ${Date.now() - startTime}ms`);
+
+    return { searchQuery, searchUrl, competitorsCount, topCompetitors, avgRating, maxRating, opportunityScore };
+}
+
 module.exports = {
     scrapeTopFree,
     scrapeTopNewFree,
     checkRuStore,
+    checkIdeaInRuStore,
     closeBrowser
 };

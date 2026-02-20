@@ -43,41 +43,48 @@
                         <span class="factor-weight">30%</span>
                         <div class="factor-info">
                             <span class="factor-name">🏟️ Competition Gap (F1)</span>
-                            <span class="factor-desc">Мало конкурентов в RuStore → высокий балл. <code>max(0, 1 − конкуренты / 20)</code></span>
+                            <span class="factor-desc">Мало конкурентов в RuStore → высокий балл.
+                                <code>max(0, 1 − конкуренты / 20)</code></span>
                         </div>
                     </div>
                     <div class="formula-factor">
                         <span class="factor-weight">25%</span>
                         <div class="factor-info">
                             <span class="factor-name">⭐ Quality Gap (F2)</span>
-                            <span class="factor-desc">Низкий средний рейтинг конкурентов → больше места для качественного приложения. <code>max(0, 1 − (avgRating − 2) / 3)</code></span>
+                            <span class="factor-desc">Низкий средний рейтинг конкурентов → больше места для
+                                качественного приложения. <code>max(0, 1 − (avgRating − 2) / 3)</code></span>
                         </div>
                     </div>
                     <div class="formula-factor">
                         <span class="factor-weight">25%</span>
                         <div class="factor-info">
                             <span class="factor-name">📈 Proven Demand (F3)</span>
-                            <span class="factor-desc">Больше установок оригинала в GP → подтверждённый спрос. <code>min(1, log₁₀(installs + 1) / 9)</code></span>
+                            <span class="factor-desc">Больше установок оригинала в GP → подтверждённый спрос.
+                                <code>min(1, log₁₀(installs + 1) / 9)</code></span>
                         </div>
                     </div>
                     <div class="formula-factor">
                         <span class="factor-weight">10%</span>
                         <div class="factor-info">
                             <span class="factor-name">✅ Validated Quality (F4)</span>
-                            <span class="factor-desc">Высокий рейтинг оригинала в GP → проверенная идея. <code>max(0, min(1, (gpRating − 2.5) / 2))</code></span>
+                            <span class="factor-desc">Высокий рейтинг оригинала в GP → проверенная идея.
+                                <code>max(0, min(1, (gpRating − 2.5) / 2))</code></span>
                         </div>
                     </div>
                     <div class="formula-factor">
                         <span class="factor-weight">10%</span>
                         <div class="factor-info">
                             <span class="factor-name">💤 Top Competitor Weakness (F5)</span>
-                            <span class="factor-desc">Слабый лучший конкурент → легче обойти. <code>max(0, 1 − (maxRating − 2) / 3)</code></span>
+                            <span class="factor-desc">Слабый лучший конкурент → легче обойти.
+                                <code>max(0, 1 − (maxRating − 2) / 3)</code></span>
                         </div>
                     </div>
                 </div>
                 <div class="formula-legend">
-                    <span class="legend-item"><span class="opp-dot opp-dot-high"></span> 65–100 — отличная возможность</span>
-                    <span class="legend-item"><span class="opp-dot opp-dot-medium"></span> 40–64 — средняя возможность</span>
+                    <span class="legend-item"><span class="opp-dot opp-dot-high"></span> 65–100 — отличная
+                        возможность</span>
+                    <span class="legend-item"><span class="opp-dot opp-dot-medium"></span> 40–64 — средняя
+                        возможность</span>
                     <span class="legend-item"><span class="opp-dot opp-dot-low"></span> 0–39 — низкая возможность</span>
                 </div>
             </div>
@@ -85,6 +92,46 @@
 
         <div class="tabs" id="tabs"></div>
         <div class="filters" id="filters"></div>
+
+        <!-- ─── Flow 2: Idea Check Panel ───────────────────────────── -->
+        <div id="idea-check-panel" style="display:none;">
+
+            <div class="idea-input-section">
+                <h2 class="idea-section-title">💡 Анализ вашей идеи</h2>
+                <p class="idea-section-subtitle">
+                    Опишите приложение, которое хотите создать. Qwen оценит перспективность идеи,
+                    затем проверим наличие аналогов в RuStore и рассчитаем Opportunity Score.
+                </p>
+                <textarea id="idea-textarea" class="idea-textarea"
+                    placeholder="Например: Хочу создать приложение для отслеживания расходов на автомобиль — бензин, страховка, ТО. С графиками и напоминаниями о плановом обслуживании."
+                    rows="4"></textarea>
+                <div class="idea-input-controls">
+                    <span id="idea-char-count" class="idea-char-count">0 / 1000</span>
+                    <button id="idea-analyze-btn" class="btn btn-idea" onclick="checkIdea()">
+                        <span class="btn-text">🔍 Анализировать идею</span>
+                        <div class="loader" style="display:none;"></div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Результат текущей проверки -->
+            <div id="idea-result-container" style="display:none;"></div>
+
+            <!-- История проверок -->
+            <div class="idea-history-section">
+                <div class="idea-history-header">
+                    <h3 class="idea-history-title">📋 История проверок</h3>
+                    <button class="btn-refresh-history" onclick="loadIdeaHistory()" title="Обновить историю">↻</button>
+                </div>
+                <div id="idea-history-list">
+                    <div class="empty-state" style="padding: 40px 0;">
+                        <div class="empty-icon">📭</div>
+                        <h3>Ещё нет проверок</h3>
+                        <p>Введите описание идеи выше и нажмите «Анализировать»</p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div class="table-container">
             <table>
@@ -142,15 +189,41 @@
         let currentTab = getParams().tab;
         let currentFilter = getParams().filter;
 
+        // ─── Switch between AppBrain table view and Idea Check panel ──
+        function applyTabView() {
+            const isIdea = currentTab === 'idea_check';
+            const ideaPanel = document.getElementById('idea-check-panel');
+            const tableContainer = document.querySelector('.table-container');
+            const filtersEl = document.getElementById('filters');
+            const formulaBlock = document.querySelector('.formula-block');
+            const updateBtn = document.getElementById('update-list-btn');
+
+            if (isIdea) {
+                ideaPanel.style.display = 'block';
+                tableContainer.style.display = 'none';
+                filtersEl.style.display = 'none';
+                if (formulaBlock) formulaBlock.style.display = 'none';
+                if (updateBtn) updateBtn.style.display = 'none';
+                loadIdeaHistory();
+            } else {
+                ideaPanel.style.display = 'none';
+                tableContainer.style.display = 'block';
+                filtersEl.style.display = 'flex';
+                if (formulaBlock) formulaBlock.style.display = 'block';
+                if (updateBtn) updateBtn.style.display = 'inline-flex';
+            }
+        }
+
         // ─── Render tabs ────────────────────────────────────────────
         function renderTabs() {
             const tabs = [
                 { key: 'top_free', label: '🏆 Top Free Overall' },
-                { key: 'top_new_free', label: '🆕 Top New Free Overall' }
+                { key: 'top_new_free', label: '🆕 Top New Free Overall' },
+                { key: 'idea_check', label: '💡 Idea Check' }
             ];
             const container = document.getElementById('tabs');
             container.innerHTML = tabs.map(t =>
-                `<a class="tab-link ${t.key === currentTab ? 'active' : ''}" data-tab="${t.key}">${t.label}</a>`
+                `<a class="tab-link ${t.key === currentTab ? 'active' : ''} ${t.key === 'idea_check' ? 'tab-link-idea' : ''}" data-tab="${t.key}">${t.label}</a>`
             ).join('');
 
             container.querySelectorAll('.tab-link').forEach(el => {
@@ -160,13 +233,18 @@
                     setParams(currentTab, currentFilter);
                     renderTabs();
                     renderFilters();
-                    loadApps();
+                    applyTabView();
+                    if (currentTab !== 'idea_check') loadApps();
                 });
             });
         }
 
         // ─── Render filters ─────────────────────────────────────────
         function renderFilters() {
+            if (currentTab === 'idea_check') {
+                document.getElementById('filters').innerHTML = '';
+                return;
+            }
             const filters = [
                 { key: 'all', label: 'All' },
                 { key: 'not_checked', label: 'Not Checked' },
@@ -502,13 +580,266 @@
             currentFilter = p.filter;
             renderTabs();
             renderFilters();
-            loadApps();
+            applyTabView();
+            if (currentTab !== 'idea_check') loadApps();
         });
+
+        // ═══════════════════════════════════════════════════════════
+        // ─── Flow 2: Idea Check JS ──────────────────────────────────
+        // ═══════════════════════════════════════════════════════════
+
+        // Счётчик символов в textarea
+        document.getElementById('idea-textarea').addEventListener('input', function () {
+            const len = this.value.length;
+            document.getElementById('idea-char-count').textContent = `${len} / 1000`;
+            if (len > 1000) this.value = this.value.slice(0, 1000);
+        });
+
+        // ─── Главная функция: отправить идею на анализ ──────────────
+        async function checkIdea() {
+            const textarea = document.getElementById('idea-textarea');
+            const btn = document.getElementById('idea-analyze-btn');
+            const btnText = btn.querySelector('.btn-text');
+            const loader = btn.querySelector('.loader');
+            const resultContainer = document.getElementById('idea-result-container');
+
+            const description = textarea.value.trim();
+            if (description.length < 10) {
+                textarea.focus();
+                textarea.style.borderColor = 'var(--danger-color)';
+                setTimeout(() => textarea.style.borderColor = '', 2000);
+                return;
+            }
+
+            btn.disabled = true;
+            btnText.style.display = 'none';
+            loader.style.display = 'block';
+            resultContainer.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/check-idea', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ description })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    resultContainer.style.display = 'block';
+                    resultContainer.innerHTML = `<div class="idea-result-panel idea-result-error">
+                        <div class="idea-verdict-header">❌ Ошибка анализа</div>
+                        <p style="color:var(--text-muted);margin-top:8px;">${escapeHtml(data.error || 'Неизвестная ошибка')}</p>
+                    </div>`;
+                    return;
+                }
+
+                resultContainer.style.display = 'block';
+                resultContainer.innerHTML = renderIdeaReport(data);
+
+                // Обновляем историю
+                loadIdeaHistory();
+
+            } catch (e) {
+                resultContainer.style.display = 'block';
+                resultContainer.innerHTML = `<div class="idea-result-panel idea-result-error">
+                    <div class="idea-verdict-header">❌ Ошибка соединения</div>
+                    <p style="color:var(--text-muted);margin-top:8px;">${escapeHtml(e.message)}</p>
+                </div>`;
+            } finally {
+                btn.disabled = false;
+                btnText.style.display = 'inline';
+                loader.style.display = 'none';
+            }
+        }
+
+        // ─── Рендер результата анализа идеи ─────────────────────────
+        function renderIdeaReport(data) {
+            const ev = data.ideaEvaluation || {};
+            const verdict = ev.verdict || 'unknown';
+
+            const verdictConfig = {
+                promising: { cls: 'verdict-promising', emoji: '🟢', label: 'Перспективная идея' },
+                weak: { cls: 'verdict-weak', emoji: '🔴', label: 'Слабая идея' },
+                too_broad: { cls: 'verdict-broad', emoji: '🟡', label: 'Слишком расплывчато' },
+                unknown: { cls: 'verdict-broad', emoji: '⚪', label: 'Неизвестно' }
+            };
+            const vc = verdictConfig[verdict] || verdictConfig.unknown;
+
+            // Блок статистики RuStore (только если был запрос)
+            let ruStoreBlock = '';
+            if (!data.skippedRuStore && data.searchUrl) {
+                const score = data.opportunityScore;
+                const oppClass = getOpportunityClass(score);
+                const oppEmoji = getOpportunityEmoji(score);
+
+                let competitorsHtml = '';
+                if (data.topCompetitors && data.topCompetitors.length > 0) {
+                    competitorsHtml = `<div class="competitors-list">
+                        <h4>🏆 Топ-${data.topCompetitors.length} конкурентов в RuStore</h4>
+                        ${data.topCompetitors.map((c, i) => `
+                            <div class="competitor-item">
+                                <span class="competitor-rank">${i + 1}.</span>
+                                <div class="competitor-info">
+                                    <a href="${escapeHtml(c.url || '')}" target="_blank" class="competitor-name">${escapeHtml(c.name)}</a>
+                                    <div class="competitor-dev">${escapeHtml(c.category || '')}</div>
+                                </div>
+                                <span class="competitor-rating" style="color:${getRatingColor(c.rating)}">
+                                    ${c.rating ? '⭐ ' + c.rating : '—'}
+                                </span>
+                            </div>`).join('')}
+                    </div>`;
+                } else {
+                    competitorsHtml = '<div class="no-results-msg">Аналогов не найдено в RuStore — рынок свободен!</div>';
+                }
+
+                ruStoreBlock = `
+                    <div class="idea-rustore-section">
+                        <div class="report-header">
+                            <h3>🔍 RuStore: <a href="${escapeHtml(data.searchUrl)}" target="_blank" class="search-query-link">"${escapeHtml(data.searchQuery || '')}"</a></h3>
+                            ${score !== null && score !== undefined ? `<span class="opportunity-badge ${oppClass}">${oppEmoji} Opportunity: ${score}/100</span>` : ''}
+                        </div>
+                        <div class="report-stats">
+                            <div class="stat-card">
+                                <span class="stat-value">${data.competitorsCount ?? '—'}</span>
+                                <span class="stat-label">Конкурентов</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-value">${data.avgRating !== null && data.avgRating !== undefined ? '⭐ ' + data.avgRating : '—'}</span>
+                                <span class="stat-label">Средний рейтинг</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-value">${data.maxRating !== null && data.maxRating !== undefined ? '⭐ ' + data.maxRating : '—'}</span>
+                                <span class="stat-label">Макс. рейтинг</span>
+                            </div>
+                        </div>
+                        ${competitorsHtml}
+                    </div>`;
+            } else if (data.skippedRuStore) {
+                ruStoreBlock = `<div class="idea-skip-notice">
+                    ⚡ Проверка RuStore пропущена — идея не прошла первичный фильтр.
+                </div>`;
+            }
+
+            // Мета-данные от Qwen
+            const meta = [];
+            if (ev.estimatedCategory) meta.push(`<span class="idea-meta-tag">📂 ${escapeHtml(ev.estimatedCategory)}</span>`);
+            if (ev.estimatedGpRating) meta.push(`<span class="idea-meta-tag">⭐ GP ~${ev.estimatedGpRating}</span>`);
+            if (ev.estimatedInstalls) meta.push(`<span class="idea-meta-tag">📲 ~${escapeHtml(ev.estimatedInstalls)}</span>`);
+
+            return `<div class="idea-result-panel">
+                <div class="idea-verdict-header ${vc.cls}">
+                    ${vc.emoji} ${vc.label}
+                    ${data.opportunityScore !== null && data.opportunityScore !== undefined && !data.skippedRuStore
+                    ? `<span class="opportunity-badge ${getOpportunityClass(data.opportunityScore)}" style="margin-left:auto;">${getOpportunityEmoji(data.opportunityScore)} ${data.opportunityScore}/100</span>`
+                    : ''}
+                </div>
+                <div class="idea-reasoning">${escapeHtml(ev.reasoning || '')}</div>
+                ${meta.length ? `<div class="idea-meta-tags">${meta.join('')}</div>` : ''}
+                ${ruStoreBlock}
+            </div>`;
+        }
+
+        // ─── Загрузить историю проверок идей ────────────────────────
+        async function loadIdeaHistory() {
+            const historyEl = document.getElementById('idea-history-list');
+            historyEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">Загрузка...</div>';
+
+            try {
+                const res = await fetch('/api/idea-checks');
+                const data = await res.json();
+
+                if (!data.success || !data.checks || data.checks.length === 0) {
+                    historyEl.innerHTML = `<div class="empty-state" style="padding:40px 0;">
+                        <div class="empty-icon">📭</div>
+                        <h3>Ещё нет проверок</h3>
+                        <p>Введите описание идеи выше и нажмите «Анализировать»</p>
+                    </div>`;
+                    return;
+                }
+
+                historyEl.innerHTML = data.checks.map(c => renderIdeaHistoryItem(c)).join('');
+
+            } catch (e) {
+                historyEl.innerHTML = `<div class="no-results-msg">Ошибка загрузки: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        // ─── Рендер карточки в истории ───────────────────────────────
+        function renderIdeaHistoryItem(check) {
+            const verdictConfig = {
+                promising: { cls: 'verdict-promising', emoji: '🟢' },
+                weak: { cls: 'verdict-weak', emoji: '🔴' },
+                too_broad: { cls: 'verdict-broad', emoji: '🟡' }
+            };
+            const vc = verdictConfig[check.verdict] || { cls: 'verdict-broad', emoji: '⚪' };
+            const score = check.opportunity_score;
+            const date = new Date(check.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+            return `<div class="idea-history-item" onclick="toggleIdeaHistoryReport(${check.id}, this)">
+                <div class="idea-history-item-header">
+                    <span class="idea-history-verdict ${vc.cls}">${vc.emoji}</span>
+                    <span class="idea-history-desc">${escapeHtml(check.description.slice(0, 120))}${check.description.length > 120 ? '…' : ''}</span>
+                    <div class="idea-history-meta">
+                        ${score !== null && score !== undefined ? `<span class="opportunity-badge ${getOpportunityClass(score)}" style="font-size:0.75rem;padding:2px 8px;">${getOpportunityEmoji(score)} ${score}</span>` : ''}
+                        <span class="idea-history-date">${date}</span>
+                    </div>
+                </div>
+                <div class="idea-history-report" id="idea-history-report-${check.id}" style="display:none;"></div>
+            </div>`;
+        }
+
+        // ─── Toggle детального отчёта в истории ─────────────────────
+        async function toggleIdeaHistoryReport(ideaId, itemEl) {
+            const reportEl = document.getElementById(`idea-history-report-${ideaId}`);
+            if (reportEl.style.display === 'block') {
+                reportEl.style.display = 'none';
+                return;
+            }
+
+            if (reportEl.innerHTML.trim() === '') {
+                reportEl.style.display = 'block';
+                reportEl.innerHTML = '<div style="padding:16px;text-align:center;"><div class="loader" style="display:inline-block;border-top-color:var(--accent-color);"></div> Загрузка...</div>';
+                try {
+                    const res = await fetch(`/api/idea-report/${ideaId}`);
+                    const data = await res.json();
+                    if (data.success && data.report) {
+                        const r = data.report;
+                        // Собираем data-объект в формат renderIdeaReport
+                        const payload = {
+                            ideaEvaluation: {
+                                verdict: r.verdict,
+                                reasoning: r.reasoning,
+                                estimatedCategory: r.estimatedCategory,
+                                estimatedGpRating: r.estimatedGpRating,
+                                estimatedInstalls: r.estimatedInstalls
+                            },
+                            searchQuery: r.searchQuery,
+                            searchUrl: r.ruStoreReport?.searchUrl || null,
+                            skippedRuStore: r.skippedRuStore,
+                            competitorsCount: r.ruStoreReport?.competitorsCount ?? 0,
+                            avgRating: r.ruStoreReport?.avgRating ?? null,
+                            maxRating: r.ruStoreReport?.maxRating ?? null,
+                            opportunityScore: r.opportunityScore,
+                            topCompetitors: r.ruStoreReport?.topCompetitors || []
+                        };
+                        reportEl.innerHTML = renderIdeaReport(payload);
+                    } else {
+                        reportEl.innerHTML = `<div class="no-results-msg">Ошибка: ${escapeHtml(data.error || 'Неизвестно')}</div>`;
+                    }
+                } catch (e) {
+                    reportEl.innerHTML = `<div class="no-results-msg">Ошибка: ${escapeHtml(e.message)}</div>`;
+                }
+            } else {
+                reportEl.style.display = 'block';
+            }
+        }
 
         // ─── Init ───────────────────────────────────────────────────
         renderTabs();
         renderFilters();
-        loadApps();
+        applyTabView();
+        if (currentTab !== 'idea_check') loadApps();
     </script>
 </body>
 

@@ -758,3 +758,298 @@ tr:hover td {
     margin: 0;
     font-size: 0.9rem;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Flow 2 — Idea Check styles
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Специальный цвет для вкладки Idea Check */
+.tab-link-idea {
+    color: #d2a8ff;
+}
+.tab-link-idea:hover {
+    color: #d2a8ff;
+    background: rgba(210, 168, 255, 0.07);
+}
+.tab-link-idea.active {
+    color: #d2a8ff;
+    border-color: var(--glass-border);
+    border-bottom-color: var(--bg-color);
+}
+
+/* Кнопка "Анализировать идею" */
+.btn-idea {
+    background: linear-gradient(135deg, #6e40c9, #8a2fbc);
+    color: #fff;
+    border: 1px solid rgba(210, 168, 255, 0.3);
+    padding: 10px 22px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.btn-idea:hover {
+    background: linear-gradient(135deg, #8a2fbc, #a040d0);
+    box-shadow: 0 4px 16px rgba(138, 47, 188, 0.4);
+    transform: translateY(-1px);
+}
+.btn-idea:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Секция ввода идеи */
+.idea-input-section {
+    background: var(--card-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 28px;
+}
+
+.idea-section-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.2rem;
+    margin: 0 0 8px 0;
+    background: linear-gradient(90deg, #d2a8ff, #a5d6ff);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.idea-section-subtitle {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    line-height: 1.6;
+    margin: 0 0 20px 0;
+}
+
+.idea-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    color: var(--text-color);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    border-radius: 8px;
+    padding: 14px 16px;
+    resize: vertical;
+    min-height: 100px;
+    transition: border-color 0.2s;
+    outline: none;
+}
+.idea-textarea:focus {
+    border-color: rgba(210, 168, 255, 0.5);
+    box-shadow: 0 0 0 3px rgba(210, 168, 255, 0.08);
+}
+.idea-textarea::placeholder {
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+
+.idea-input-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+}
+
+.idea-char-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Панель результата */
+.idea-result-panel {
+    background: linear-gradient(135deg, rgba(22, 27, 34, 0.98), rgba(32, 24, 48, 0.95));
+    border: 1px solid rgba(210, 168, 255, 0.15);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 28px;
+    animation: fadeInUp 0.35s ease;
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.idea-result-error {
+    border-color: rgba(248, 81, 73, 0.25);
+}
+
+/* Заголовок verdict */
+.idea-verdict-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 22px;
+    font-weight: 700;
+    font-size: 1rem;
+    border-bottom: 1px solid rgba(240, 246, 252, 0.07);
+}
+
+.verdict-promising {
+    background: rgba(63, 185, 80, 0.1);
+    color: var(--success-color);
+}
+.verdict-weak {
+    background: rgba(248, 81, 73, 0.1);
+    color: var(--danger-color);
+}
+.verdict-broad {
+    background: rgba(210, 153, 34, 0.1);
+    color: var(--warning-color);
+}
+
+/* Reasoning */
+.idea-reasoning {
+    padding: 16px 22px 12px;
+    color: var(--text-color);
+    font-size: 0.9rem;
+    line-height: 1.65;
+    border-bottom: 1px solid rgba(240, 246, 252, 0.05);
+}
+
+/* Мета-теги (категория, рейтинг, установки) */
+.idea-meta-tags {
+    padding: 10px 22px 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 1px solid rgba(240, 246, 252, 0.05);
+}
+.idea-meta-tag {
+    background: rgba(210, 168, 255, 0.08);
+    border: 1px solid rgba(210, 168, 255, 0.2);
+    color: #d2a8ff;
+    padding: 3px 11px;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+/* RuStore блок внутри результата */
+.idea-rustore-section {
+    padding: 18px 22px 20px;
+}
+
+/* Skip notice */
+.idea-skip-notice {
+    margin: 14px 22px 18px;
+    padding: 12px 16px;
+    background: rgba(210, 153, 34, 0.08);
+    border: 1px solid rgba(210, 153, 34, 0.2);
+    border-radius: 8px;
+    color: var(--warning-color);
+    font-size: 0.84rem;
+}
+
+/* История проверок */
+.idea-history-section {
+    margin-top: 8px;
+}
+
+.idea-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.idea-history-title {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-size: 0.82rem;
+}
+
+.btn-refresh-history {
+    background: transparent;
+    border: 1px solid var(--glass-border);
+    color: var(--text-muted);
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+.btn-refresh-history:hover {
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+/* Карточка истории */
+.idea-history-item {
+    background: var(--card-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    overflow: hidden;
+}
+.idea-history-item:hover {
+    border-color: rgba(210, 168, 255, 0.3);
+    box-shadow: 0 2px 12px rgba(210, 168, 255, 0.07);
+}
+
+.idea-history-item-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 16px;
+}
+
+.idea-history-verdict {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.idea-history-desc {
+    flex: 1;
+    font-size: 0.84rem;
+    color: var(--text-color);
+    line-height: 1.4;
+    overflow: hidden;
+}
+
+.idea-history-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.idea-history-date {
+    font-size: 0.73rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* Детальный отчёт внутри истории */
+.idea-history-report {
+    border-top: 1px solid var(--glass-border);
+    padding: 16px;
+    background: rgba(0,0,0,0.15);
+}
+.idea-history-report .idea-result-panel {
+    margin-bottom: 0;
+    animation: none;
+}
