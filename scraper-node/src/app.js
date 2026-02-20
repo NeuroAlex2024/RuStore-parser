@@ -187,7 +187,8 @@ app.post('/api/check-idea', async (req, res) => {
             avgRating: result.avgRating,
             maxRating: result.maxRating,
             opportunityScore: result.opportunityScore,
-            topCompetitors: result.topCompetitors
+            topCompetitors: result.topCompetitors,
+            finalJudge: result.finalJudge || null
         });
     } catch (error) {
         console.error('[API] check-idea failed:', error.message);

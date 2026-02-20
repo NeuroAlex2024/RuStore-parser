@@ -12,6 +12,7 @@ const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
 const DASHSCOPE_BASE_URL = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
 const LLM_MODEL = 'qwen-flash';
 const IDEA_EVALUATOR_MODEL = 'qwen3.5-plus'; // qwen3.5-plus — новейшая модель для глубокого анализа идей
+const FINAL_JUDGE_MODEL = 'qwen-plus'; // Финальный судья — взвешенная оценка после алгоритма
 
 const LLM_SYSTEM_PROMPT = `Ты генератор поисковых запросов для RuStore (российский магазин приложений для Android).
 
@@ -572,12 +573,12 @@ async function checkRuStore(title, category, gpRating, installs) {
             };
         }
 
-        // 4. Извлекаем данные из карточек приложений
+        // 4. Извлекаем данные из карточек приложений (сохраняем порядок выдачи)
         competitors = await page.evaluate(() => {
             const cards = document.querySelectorAll('[data-testid="app-card"]');
             const results = [];
 
-            cards.forEach(card => {
+            cards.forEach((card, index) => {
                 const href = card.getAttribute('href') || '';
                 const url = href.startsWith('http') ? href : 'https://www.rustore.ru' + href;
 
@@ -595,7 +596,8 @@ async function checkRuStore(title, category, gpRating, installs) {
                 }
 
                 if (name) {
-                    results.push({ name, category: cat, rating, url });
+                    // position = место в поисковой выдаче RuStore (0-based)
+                    results.push({ name, category: cat, rating, url, position: index });
                 }
             });
 
@@ -633,9 +635,11 @@ async function checkRuStore(title, category, gpRating, installs) {
         ? Math.max(...ratingsOnly)
         : null;
 
-    // 7. Топ-5 релевантных конкурентов по рейтингу
+    // 7. Топ-5 по позиции в выдаче RuStore (не по рейтингу).
+    //    RuStore сам ранжирует по релевантности + популярности — это важнее нашего рейтинга.
+    //    Если рейтинга нет — оставляем null (фронт покажет 0 ★)
     const topCompetitors = [...relevant]
-        .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+        .sort((a, b) => a.position - b.position)
         .slice(0, 5);
 
     // 8. Рассчитываем Opportunity Score
@@ -839,17 +843,20 @@ async function checkIdeaInRuStore(description) {
     // Шаг 2: Вторичный фильтр — проверка в RuStore
     console.log(`[IDEA] Proceeding to RuStore check with query: "${evaluation.searchQuery}"`);
 
-    // Используем searchQuery от Qwen напрямую, минуя внутреннюю генерацию
-    // Передаём специальный флаг через category, чтобы checkRuStore не вызывал LLM повторно
     const ruStoreResult = await checkRuStoreWithQuery(
         evaluation.searchQuery,
         evaluation.estimatedGpRating || 4.0,
         evaluation.estimatedInstalls || '1M+'
     );
 
+    // Шаг 3 (параллельно с фронтом): Qwen финальный судья
+    console.log('[IDEA] Running final judge...');
+    const judgeResult = await finalJudge(description, evaluation, ruStoreResult);
+
     return {
         ideaEvaluation: evaluation,
-        ...ruStoreResult
+        ...ruStoreResult,
+        finalJudge: judgeResult  // null если API недоступен
     };
 }
 
@@ -886,7 +893,7 @@ async function checkRuStoreWithQuery(searchQuery, gpRating, installs) {
         competitors = await page.evaluate(() => {
             const cards = document.querySelectorAll('[data-testid="app-card"]');
             const results = [];
-            cards.forEach(card => {
+            cards.forEach((card, index) => {
                 const href = card.getAttribute('href') || '';
                 const url = href.startsWith('http') ? href : 'https://www.rustore.ru' + href;
                 const paragraphs = card.querySelectorAll('p');
@@ -898,7 +905,8 @@ async function checkRuStoreWithQuery(searchQuery, gpRating, installs) {
                     const ratingText = ratingEl.textContent.trim().replace(',', '.');
                     rating = parseFloat(ratingText) || null;
                 }
-                if (name) results.push({ name, category: cat, rating, url });
+                // position = место в поисковой выдаче RuStore (0-based)
+                if (name) results.push({ name, category: cat, rating, url, position: index });
             });
             return results;
         });
@@ -910,23 +918,24 @@ async function checkRuStoreWithQuery(searchQuery, gpRating, installs) {
         await page.close();
     }
 
-    // Фильтрация по релевантности
-    for (const c of competitors) {
-        c.relevance = calculateRelevance(c, searchQuery, searchQuery);
-        c.relevant = c.relevance >= RELEVANCE_THRESHOLD;
-    }
-    const relevant = competitors.filter(c => c.relevant);
-    console.log(`[IDEA] Relevance filter: ${relevant.length} relevant of ${competitors.length}`);
+    // Flow 2: НЕ фильтруем по релевантности названий.
+    // RuStore уже сделал поиск по нашему запросу — все результаты релевантны по определению.
+    // Это исправляет проблему с нахождением приложений с английскими названиями.
+    const allResults = competitors;
+    console.log(`[IDEA] Using all ${allResults.length} search results (no name-based filtering)`);
 
-    const competitorsCount = relevant.length;
-    const ratingsOnly = relevant.filter(c => c.rating !== null).map(c => c.rating);
+    const competitorsCount = allResults.length;
+    const ratingsOnly = allResults.filter(c => c.rating !== null).map(c => c.rating);
     const avgRating = ratingsOnly.length > 0
         ? Math.round((ratingsOnly.reduce((a, b) => a + b, 0) / ratingsOnly.length) * 10) / 10
         : null;
     const maxRating = ratingsOnly.length > 0 ? Math.max(...ratingsOnly) : null;
 
-    const topCompetitors = [...relevant]
-        .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    // Топ-5 по позиции в выдаче RuStore (не по рейтингу).
+    // RuStore сам ранжирует по релевантности + популярности.
+    // Если рейтинга нет — оставляем null (фронт покажет 0 ★)
+    const topCompetitors = [...allResults]
+        .sort((a, b) => a.position - b.position)
         .slice(0, 5);
 
     const opportunityScore = calculateOpportunityScore({
@@ -940,6 +949,115 @@ async function checkRuStoreWithQuery(searchQuery, gpRating, installs) {
     console.log(`[IDEA] Score: ${opportunityScore}, competitors: ${competitorsCount}, done in ${Date.now() - startTime}ms`);
 
     return { searchQuery, searchUrl, competitorsCount, topCompetitors, avgRating, maxRating, opportunityScore };
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// FLOW 2 — Шаг 4: Qwen финальный судья
+// ═════════════════════════════════════════════════════════════════════
+
+/**
+ * Финальная оценка идеи через Qwen.
+ * Получает все данные (идея + конкуренты + алгоритмический скор)
+ * и выдаёт взвешенный итоговый балл с объяснением.
+ *
+ * @returns {{ finalScore, finalVerdict, adjustment, adjustmentReason, marketInsight, recommendation }}
+ */
+async function finalJudge(description, evaluation, ruStoreResult) {
+    if (!DASHSCOPE_API_KEY) {
+        console.warn('[JUDGE] No API key — skipping final judge');
+        return null;
+    }
+
+    const { opportunityScore, competitorsCount, avgRating, maxRating, topCompetitors } = ruStoreResult;
+    const { verdict: initialVerdict, reasoning, estimatedCategory, estimatedGpRating, estimatedInstalls } = evaluation;
+
+    const competitorLines = topCompetitors && topCompetitors.length > 0
+        ? topCompetitors.map((c, i) =>
+            `  #${i + 1} ${c.name} | ★ ${c.rating !== null ? c.rating : 'нет рейтинга'} | ${c.category || '—'}`
+        ).join('\n')
+        : '  (аналогов не найдено)';
+
+    const judgePrompt = `Ты аналитик мобильного рынка. Оцени инвестиционную привлекательность идеи приложения для RuStore.
+
+ИДЕЯ: "${description}"
+
+ПЕРВИЧНАЯ ОЦЕНКА (Qwen):
+  verdict: ${initialVerdict}
+  reasoning: ${reasoning || '—'}
+  Категория: ${estimatedCategory || '—'}, GP рейтинг ~${estimatedGpRating || '—'}, Установки ~${estimatedInstalls || '—'}
+
+АЛГОРИТМИЧЕСКИЙ СКОР: ${opportunityScore}/100
+  Конкурентов в RuStore: ${competitorsCount}
+  Средний рейтинг конкурентов: ${avgRating !== null ? avgRating : 'нет данных'}
+  Макс. рейтинг: ${maxRating !== null ? maxRating : 'нет данных'}
+
+ТОП КОНКУРЕНТОВ В RUSTORE (по позиции в выдаче):
+${competitorLines}
+
+Твоя задача:
+1. Взгляни на реальных конкурентов — насколько они сильны? Есть ли там зарубежные приложения без русскоязычного UX?
+2. Оцени специфику российского рынка (локализация, регуляторные особенности, предпочтения аудитории).
+3. Скорректируй алгоритмический скор если считаешь нужным (±20 максимум без очень веских оснований).
+
+Отвечай СТРОГО в формате JSON без markdown-блоков:
+{
+  "finalScore": 72,
+  "finalVerdict": "✅ Перспективно",
+  "adjustment": +5,
+  "adjustmentReason": "Почему скорректировал (1 предложение)",
+  "marketInsight": "Специфика российского рынка для этой ниши (2-3 предложения)",
+  "recommendation": "Конкретный следующий шаг для разработчика (1-2 предложения)"
+}
+
+zfinishedVerdict варианты: "🔥 Горячая ниша" | "✅ Перспективно" | "⚠️ Осторожно" | "❌ Пропустить"`;
+
+    try {
+        const raw = await withRetry(async () => {
+            const response = await fetch(`${DASHSCOPE_BASE_URL}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: FINAL_JUDGE_MODEL,
+                    messages: [
+                        { role: 'user', content: judgePrompt }
+                    ],
+                    temperature: 0.4,
+                    max_tokens: 500
+                }),
+                signal: AbortSignal.timeout(25000)
+            });
+
+            if (!response.ok) {
+                const errBody = await response.text();
+                throw new Error(`DashScope HTTP ${response.status}: ${errBody}`);
+            }
+
+            const data = await response.json();
+            const content = data.choices?.[0]?.message?.content?.trim();
+            if (!content) throw new Error('Empty response from final judge');
+            return content;
+        }, { name: 'Final judge', maxRetries: 2, baseDelay: 1500 });
+
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        // JSON не поддерживает явные "+" перед числом — убираем их
+        const cleanedJson = (jsonMatch ? jsonMatch[0] : raw)
+            .replace(/:\s*\+([\d.]+)/g, ': $1');
+        const parsed = JSON.parse(cleanedJson);
+
+        // Нормализация adjustment — должно быть числом
+        if (typeof parsed.adjustment !== 'number') {
+            parsed.adjustment = parseInt(parsed.adjustment) || 0;
+        }
+
+        console.log(`[JUDGE] finalScore=${parsed.finalScore}, verdict="${parsed.finalVerdict}"`);
+        return parsed;
+    } catch (error) {
+        console.error('[JUDGE] Failed:', error.message);
+        return null; // Не критично — возвращаем null, фронт покажет только алгоритмический скор
+    }
 }
 
 module.exports = {

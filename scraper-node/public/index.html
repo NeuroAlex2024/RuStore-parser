@@ -494,7 +494,7 @@
             if (report.topCompetitors && report.topCompetitors.length > 0) {
                 competitorsHtml = `
                     <div class="competitors-list">
-                        <h4>🏆 Топ-5 конкурентов по рейтингу</h4>
+                        <h4>🏆 Топ-5 по выдаче RuStore</h4>
                         ${report.topCompetitors.map((c, i) => `
                             <div class="competitor-item">
                                 <span class="competitor-rank">${i + 1}.</span>
@@ -503,7 +503,7 @@
                                     <div class="competitor-dev">${escapeHtml(c.category || '')}</div>
                                 </div>
                                 <span class="competitor-rating" style="color: ${getRatingColor(c.rating)}">
-                                    ${c.rating ? '⭐ ' + c.rating : '—'}
+                                    ${c.rating !== null && c.rating !== undefined ? '⭐ ' + c.rating : '0 ⭐'}
                                 </span>
                             </div>
                         `).join('')}
@@ -676,7 +676,7 @@
                 let competitorsHtml = '';
                 if (data.topCompetitors && data.topCompetitors.length > 0) {
                     competitorsHtml = `<div class="competitors-list">
-                        <h4>🏆 Топ-${data.topCompetitors.length} конкурентов в RuStore</h4>
+                        <h4>🏆 Топ-${data.topCompetitors.length} по выдаче RuStore</h4>
                         ${data.topCompetitors.map((c, i) => `
                             <div class="competitor-item">
                                 <span class="competitor-rank">${i + 1}.</span>
@@ -685,7 +685,7 @@
                                     <div class="competitor-dev">${escapeHtml(c.category || '')}</div>
                                 </div>
                                 <span class="competitor-rating" style="color:${getRatingColor(c.rating)}">
-                                    ${c.rating ? '⭐ ' + c.rating : '—'}
+                                    ${c.rating !== null && c.rating !== undefined ? '⭐ ' + c.rating : '0 ⭐'}
                                 </span>
                             </div>`).join('')}
                     </div>`;
@@ -735,17 +735,39 @@
                 </div>`;
             }
 
+            // Блок финального судьи Qwen
+            let judgeBlock = '';
+            if (data.finalJudge) {
+                const fj = data.finalJudge;
+                const adjSign = fj.adjustment > 0 ? '+' : '';
+                const adjColor = fj.adjustment > 0 ? 'var(--success-color)' : fj.adjustment < 0 ? 'var(--danger-color)' : 'var(--text-muted)';
+                const finalOppClass = getOpportunityClass(fj.finalScore);
+                judgeBlock = `
+                <div class="idea-judge-section">
+                    <div class="idea-judge-header">
+                        <span class="idea-judge-title">🤖 Оценка Qwen-судьи</span>
+                        <span class="opportunity-badge ${finalOppClass}" style="font-size:1.1rem;padding:6px 16px;">${fj.finalVerdict} &nbsp; ${fj.finalScore}/100</span>
+                    </div>
+                    ${fj.adjustment !== 0 ? `<div class="idea-judge-adjustment" style="color:${adjColor}">Корректировка от алгоритма: <strong>${adjSign}${fj.adjustment}</strong> — ${escapeHtml(fj.adjustmentReason || '')}</div>` : `<div class="idea-judge-adjustment" style="color:var(--text-muted)">Алгоритмический скор подтверждён без изменений</div>`}
+                    ${fj.marketInsight ? `<div class="idea-judge-insight"><span class="idea-judge-label">🇷🇺 Рынок РФ:</span> ${escapeHtml(fj.marketInsight)}</div>` : ''}
+                    ${fj.recommendation ? `<div class="idea-judge-rec"><span class="idea-judge-label">💡 Рекомендация:</span> ${escapeHtml(fj.recommendation)}</div>` : ''}
+                </div>`;
+            }
+
             return `<div class="idea-result-panel">
                 <div class="idea-verdict-header ${vc.cls}">
                     ${vc.emoji} ${vc.label}
-                    ${data.opportunityScore !== null && data.opportunityScore !== undefined && !data.skippedRuStore
-                    ? `<span class="opportunity-badge ${getOpportunityClass(data.opportunityScore)}" style="margin-left:auto;">${getOpportunityEmoji(data.opportunityScore)} ${data.opportunityScore}/100</span>`
-                    : ''}
+                    ${data.finalJudge
+                    ? `<span class="opportunity-badge ${getOpportunityClass(data.finalJudge.finalScore)}" style="margin-left:auto;">${data.finalJudge.finalVerdict} &nbsp;${data.finalJudge.finalScore}/100</span>`
+                    : data.opportunityScore !== null && data.opportunityScore !== undefined && !data.skippedRuStore
+                        ? `<span class="opportunity-badge ${getOpportunityClass(data.opportunityScore)}" style="margin-left:auto;">${getOpportunityEmoji(data.opportunityScore)} ${data.opportunityScore}/100</span>`
+                        : ''}
                 </div>
                 <div class="idea-reasoning">${escapeHtml(ev.reasoning || '')}</div>
-                ${insightBanner}
+                ${!data.finalJudge ? insightBanner : ''}
                 ${meta.length ? `<div class="idea-meta-tags">${meta.join('')}</div>` : ''}
                 ${ruStoreBlock}
+                ${judgeBlock}
             </div>`;
         }
 
@@ -830,7 +852,8 @@
                             avgRating: r.ruStoreReport?.avgRating ?? null,
                             maxRating: r.ruStoreReport?.maxRating ?? null,
                             opportunityScore: r.opportunityScore,
-                            topCompetitors: r.ruStoreReport?.topCompetitors || []
+                            topCompetitors: r.ruStoreReport?.topCompetitors || [],
+                            finalJudge: r.finalJudge || null
                         };
                         reportEl.innerHTML = renderIdeaReport(payload);
                     } else {

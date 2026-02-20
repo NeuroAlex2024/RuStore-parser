@@ -96,6 +96,7 @@ async function initSchema() {
             estimated_gp_rating REAL,
             estimated_installs TEXT,
             opportunity_score INTEGER,
+            final_judge TEXT,
             skipped_rustore INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -128,6 +129,14 @@ async function initSchema() {
     if (!columnNames.includes('source')) {
         await dbRun("ALTER TABLE apps ADD COLUMN source TEXT DEFAULT 'top_free'");
         console.log('Migrated: added source column');
+    }
+
+    // Миграция для idea_checks: добавляем final_judge если её нет
+    const ideaColumns = await dbAll("PRAGMA table_info(idea_checks)");
+    const ideaColumnNames = ideaColumns.map(c => c.name);
+    if (!ideaColumnNames.includes('final_judge')) {
+        await dbRun('ALTER TABLE idea_checks ADD COLUMN final_judge TEXT DEFAULT NULL');
+        console.log('Migrated: added final_judge column to idea_checks');
     }
 
     console.log('Database schema initialized');
@@ -295,10 +304,14 @@ async function saveIdeaCheck(description, evaluation, ruStoreResult) {
     await schemaReady;
     await dbRun('BEGIN TRANSACTION');
     try {
+        const finalJudgeJson = ruStoreResult.finalJudge
+            ? JSON.stringify(ruStoreResult.finalJudge)
+            : null;
+
         const { lastID } = await dbRun(
             `INSERT INTO idea_checks
-             (description, verdict, reasoning, search_query, estimated_category, estimated_gp_rating, estimated_installs, opportunity_score, skipped_rustore)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (description, verdict, reasoning, search_query, estimated_category, estimated_gp_rating, estimated_installs, opportunity_score, final_judge, skipped_rustore)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 description,
                 evaluation.verdict,
@@ -307,7 +320,8 @@ async function saveIdeaCheck(description, evaluation, ruStoreResult) {
                 evaluation.estimatedCategory || '',
                 evaluation.estimatedGpRating || null,
                 evaluation.estimatedInstalls || '',
-                ruStoreResult.opportunityScore ?? null,
+                ruStoreResult.finalJudge?.finalScore ?? ruStoreResult.opportunityScore ?? null,
+                finalJudgeJson,
                 ruStoreResult.skippedRuStore ? 1 : 0
             ]
         );
@@ -372,6 +386,7 @@ async function getIdeaReport(ideaId) {
         estimatedGpRating: check.estimated_gp_rating,
         estimatedInstalls: check.estimated_installs,
         opportunityScore: check.opportunity_score,
+        finalJudge: check.final_judge ? JSON.parse(check.final_judge) : null,
         skippedRuStore: !!check.skipped_rustore,
         createdAt: check.created_at,
         ruStoreReport: report ? {

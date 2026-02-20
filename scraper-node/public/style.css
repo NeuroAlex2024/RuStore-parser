@@ -1090,3 +1090,69 @@ tr:hover td {
     margin-bottom: 0;
     animation: none;
 }
+
+/* ─── Qwen финальный судья ───────────────────────────────────────── */
+
+.idea-judge-section {
+    background: linear-gradient(135deg, rgba(110, 64, 201, 0.08), rgba(88, 166, 255, 0.05));
+    border: 1px solid rgba(210, 168, 255, 0.2);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+.idea-judge-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #6e40c9, #58a6ff, #3fb950);
+}
+
+.idea-judge-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.idea-judge-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #d2a8ff;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.idea-judge-adjustment {
+    font-size: 0.83rem;
+    color: var(--text-muted);
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.idea-judge-insight,
+.idea-judge-rec {
+    font-size: 0.84rem;
+    color: var(--text-color);
+    line-height: 1.6;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.idea-judge-label {
+    font-weight: 600;
+    color: #d2a8ff;
+    margin-right: 6px;
+}
