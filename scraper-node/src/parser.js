@@ -11,7 +11,7 @@ const RUSTORE_SEARCH_URL = 'https://www.rustore.ru/catalog/search?query=';
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
 const DASHSCOPE_BASE_URL = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
 const LLM_MODEL = 'qwen-flash';
-const IDEA_EVALUATOR_MODEL = 'qwen-plus'; // qwen-plus — баланс качества и скорости для анализа идей
+const IDEA_EVALUATOR_MODEL = 'qwen3.5-plus'; // qwen3.5-plus — новейшая модель для глубокого анализа идей
 
 const LLM_SYSTEM_PROMPT = `Ты генератор поисковых запросов для RuStore (российский магазин приложений для Android).
 
