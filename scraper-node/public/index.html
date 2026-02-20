@@ -727,6 +727,14 @@
             if (ev.estimatedGpRating) meta.push(`<span class="idea-meta-tag">⭐ GP ~${ev.estimatedGpRating}</span>`);
             if (ev.estimatedInstalls) meta.push(`<span class="idea-meta-tag">📲 ~${escapeHtml(ev.estimatedInstalls)}</span>`);
 
+            // Показываем инсайт-баннер когда идея перспективна, но скор красный
+            let insightBanner = '';
+            if (verdict === 'promising' && data.opportunityScore !== null && data.opportunityScore !== undefined && data.opportunityScore < 40 && !data.skippedRuStore) {
+                insightBanner = `<div class="idea-insight-banner">
+                    💡 <strong>Идея перспективна</strong> — AI оценил её положительно. Красный скор отражает наличие конкурентов в RuStore, но <em>не отменяет ценность идеи</em>: можно войти с лучшим продуктом.
+                </div>`;
+            }
+
             return `<div class="idea-result-panel">
                 <div class="idea-verdict-header ${vc.cls}">
                     ${vc.emoji} ${vc.label}
@@ -735,6 +743,7 @@
                     : ''}
                 </div>
                 <div class="idea-reasoning">${escapeHtml(ev.reasoning || '')}</div>
+                ${insightBanner}
                 ${meta.length ? `<div class="idea-meta-tags">${meta.join('')}</div>` : ''}
                 ${ruStoreBlock}
             </div>`;
